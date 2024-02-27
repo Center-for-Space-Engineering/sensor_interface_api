@@ -16,6 +16,7 @@ class sensor_parent():
          make_serial_tap : sends a request to the serial listener telling it to send data to this class.
          send_tab : this function is what the serial listener calls to send the tab to this class.
          create_tab : this function creates a tab to this class.
+         get_sensor_name : This function returns the name of the sensor. The users class need to implement this.
 
     '''
     def __init__(self, coms) -> None:
@@ -69,4 +70,10 @@ class sensor_parent():
                 args[0] : tab function to call.  
         '''
         self.__tab_requests.append(args[0])
+    def get_sensor_name(self):
+        '''
+            This function returns teh name of the sensor.
+        '''
+        raise NotImplementedError("get_sensor_name Not implemented, should return a string name of the sensor.")
+
           
