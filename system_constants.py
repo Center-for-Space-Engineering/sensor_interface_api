@@ -2,3 +2,4 @@
 interface_writer_list = {}
 interface_listener_list = {}
 server = None
+sensors_config = {}

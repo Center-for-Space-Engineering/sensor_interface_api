@@ -6,6 +6,6 @@ class sobj_gps_board(sensor_parent, threadWrapper):
     def __init__(self, coms):
         sensor_parent.__init__(self, coms)
         self.__name = 'gps board'
-        # print(sensor_config.serial_port_one)
+        
     def get_sensor_name(self):
         return self.__name
