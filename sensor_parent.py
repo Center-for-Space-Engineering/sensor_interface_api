@@ -4,6 +4,7 @@
 
 #python imports
 import threading
+import copy
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
@@ -22,8 +23,8 @@ class sensor_parent(threadWrapper):
          send_tab : this function is what the serial listener calls to send the tab to this class.
          create_tab : this function creates a tab to this class.
          get_sensor_name : This function returns the name of the sensor. The users class need to implement this.
-
-
+         start_publisher : Starts a data publisher on its own thread. (For active publishers only)
+         publish : publishes data
     '''
     def __init__(self, coms, config) -> None:
         ############ set up the threadWrapper stuff ############
@@ -39,6 +40,8 @@ class sensor_parent(threadWrapper):
         self.__data_lock = threading.Lock()
         self.__tab_requests = []
         self.__config = config
+        self.__publish_data = []
+        self.__publish_data_lock = threading.Lock()
 
         ############ Set up the sensor according to the config file ############
         if self.__config['serial_port'] != 'None':
@@ -96,5 +99,12 @@ class sensor_parent(threadWrapper):
             This function returns teh name of the sensor.
         '''
         raise NotImplementedError("get_sensor_name Not implemented, should return a string name of the sensor.")
-
+    def start_publisher(self):
+        pass #TODO: call publish on an given interval on its own thread.
+    def publish(self):
+        with self.__publish_data_lock:
+            data_copy = copy.deepcopy(self.__publish_data)
+        for subscriber in self.__tab_requests:
+            temp  = copy.deepcopy(data_copy)
+            subscriber.send_tap(temp)
           
