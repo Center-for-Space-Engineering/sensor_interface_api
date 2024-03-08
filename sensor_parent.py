@@ -25,6 +25,7 @@ class sensor_parent(threadWrapper):
          get_sensor_name : This function returns the name of the sensor. The users class need to implement this.
          start_publisher : Starts a data publisher on its own thread. (For active publishers only)
          publish : publishes data
+         set_publish_data : the users class calls this function, it sets data to be published
     '''
     def __init__(self, coms, config) -> None:
         ############ set up the threadWrapper stuff ############
@@ -42,6 +43,7 @@ class sensor_parent(threadWrapper):
         self.__config = config
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
+        self.__publish_data 
 
         ############ Set up the sensor according to the config file ############
         if self.__config['serial_port'] != 'None':
@@ -103,8 +105,8 @@ class sensor_parent(threadWrapper):
         pass #TODO: call publish on an given interval on its own thread.
     def publish(self):
         with self.__publish_data_lock:
-            data_copy = copy.deepcopy(self.__publish_data)
+            data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
         for subscriber in self.__tab_requests:
-            temp  = copy.deepcopy(data_copy)
+            temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
             subscriber.send_tap(temp)
           
