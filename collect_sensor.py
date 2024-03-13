@@ -5,8 +5,6 @@ class sensor_importer():
     def __init__(self) -> None:
         self.__sensors_class = []
         self.__sensors = []
-        
-
     def import_modules(self):
         sub_folder_path = os.path.dirname(__file__)
         for file_name in os.listdir(sub_folder_path):
