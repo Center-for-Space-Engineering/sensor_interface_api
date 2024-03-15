@@ -5,10 +5,11 @@
 #python imports
 import threading
 import copy
+import time
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
-
+from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator # pylint: disable=e0401
 
 class sensor_parent(threadWrapper):
     '''
@@ -28,8 +29,8 @@ class sensor_parent(threadWrapper):
          publish : publishes data
          set_publish_data : the users class calls this function, it sets data to be published
          event_listener : this function waits for events to happen then it calls the function corresponding to that event
-
-
+         publish_data : Notifies the system that data is published of the given data type. 
+ 
          ARGS:
             coms : the message handler, that almost every class uses in this system.
             config : the configuration created by the user. 
@@ -50,6 +51,10 @@ class sensor_parent(threadWrapper):
         self.__name = name
         self.__data_name = self.__config['publish_data_name']
         self.__events = events_dict
+        self.__active = False
+        self.__active__lock = threading.Lock()
+        self.__interval_pub = self.__config['interval_pub']
+        ##########################################################################
 
         ############ Set up the sensor according to the config file ############
         if self.__config['serial_port'] != 'None':
@@ -58,18 +63,25 @@ class sensor_parent(threadWrapper):
             if self.__config['passive_active'] == 'passive':
                 self.__events['data_received_event'] = self.process_data
             else :
+                self.__active = True
                 self.start_publisher()
-        
-        ############ set up the threadWrapper stuff ############
+        ##########################################################################
+        ##################### set up the threadWrapper stuff #####################
         self.__function_dict = { 
             'create_tab' : self.create_tab,
         }
         threadWrapper.__init__(self, self.__function_dict, self.__events)
+        ##########################################################################
+        ################## set up the html page generation stuff #################
+        self.__page_generator = sensor_html_page_generator(self.__name, self.__config)
+        ##########################################################################
+
+
     def get_html_page(self):
         '''
             Returns an file path to an html file.
         '''
-        raise NotImplementedError("get_html_page Not implemented, should return file path to an html file.")
+        return self.__page_generator.get_html_path()
     def get__sensor_status(self):
         '''
             Returns the status of the sensor, it is up to the user to set this status, this function returns that status to the server. 
@@ -120,15 +132,34 @@ class sensor_parent(threadWrapper):
         self.__tab_requests.append(args[0])
     def get_sensor_name(self):
         '''
-            This function returns teh name of the sensor.
+            This function returns the name of the sensor.
         '''
         raise NotImplementedError("get_sensor_name Not implemented, should return a string name of the sensor.")
     def start_publisher(self):
-        pass #TODO: call publish on an given interval on its own thread.
+        '''
+            If it is an active publisher then we will start it on its own thread.
+        '''
+        self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {self.__name}', self])
+
     def publish(self):
-        with self.__publish_data_lock:
-            data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-        for subscriber in self.__tab_requests:
-            temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
-            subscriber.send_tap(temp)
-          
+        '''
+            Publishes the data to all the other threads that have requested taps.
+        '''
+        with self.__active__lock:
+            active = self.__active
+            if active:
+                interval_pub = self.__interval_pub
+        if active:
+            while True:
+                with self.__publish_data_lock:
+                    data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
+                for subscriber in self.__tab_requests:
+                    temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
+                    subscriber.send_tap(temp)
+                time.sleep(interval_pub)
+        else :
+            with self.__publish_data_lock:
+                data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
+            for subscriber in self.__tab_requests:
+                temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
+                subscriber.send_tap(temp)
