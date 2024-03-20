@@ -6,12 +6,13 @@
 import threading
 import copy
 import time
+import re
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
 from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator # pylint: disable=e0401
 
-class sensor_parent(threadWrapper):
+class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
          There are a few functions that your sensor class must implement,
 
@@ -20,6 +21,7 @@ class sensor_parent(threadWrapper):
          set_sensor_status : Returns where the sensor is running or not. NOTE: threadWrapper has its own set_status, used by the system, so thats why the name is longer. 
          get__sensor_status : should return Running, Error, Not running. 
          get_data : Returns the last sample the sensor returned.
+         get_taps : Returns a list of taps that the user has requested for this class. 
          process_data : This is the function that is called when the data_received event is called. 
          make_data_tap : sends a request to the serial listener telling it to send data to this class.
          send_tab : this function is what the serial listener calls to send the tab to this class.
@@ -38,8 +40,9 @@ class sensor_parent(threadWrapper):
             event_dict : any events the user wishes to add. 
     '''
     def __init__(self, coms, config:dict, name:str, events_dict:dict = {}) -> None:
-        ############ Sensor information ############
+        ###################### Sensor information ################################
         self.__coms = coms
+        self.__status_lock = threading.Lock()
         self.__status = "Not Running"
         self.__data_received = []
         self.__data_lock = threading.Lock()
@@ -47,18 +50,29 @@ class sensor_parent(threadWrapper):
         self.__config = config
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
-        self.__publish_data 
-        self.__name = name
+        self.__publish_data
+        self.__name_lock = threading.Lock()
+        #check to make sure the name is a valid name
+        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
+        if bool(re.match(pattern, name)):
+            self.__name = name
+        else :
+            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
         self.__data_name = self.__config['publish_data_name']
         self.__events = events_dict
         self.__active = False
         self.__active__lock = threading.Lock()
         self.__interval_pub = self.__config['interval_pub']
+        self.__taps_lock = threading.Lock()
         ##########################################################################
 
         ############ Set up the sensor according to the config file ############
-        if self.__config['serial_port'] != 'None':
-                self.make_data_tap(self.__config['serial_port'])
+        if self.__config['tap_request'] is not None:
+                for request in self.__config['tap_request']:
+                    self.make_data_tap(request)
+                self.__taps = self.__config['tap_request']
+        else :
+            self.__taps = ['None']
         if self.__config['publisher'] == 'yes':
             if self.__config['passive_active'] == 'passive':
                 self.__events['data_received_event'] = self.process_data
@@ -73,7 +87,11 @@ class sensor_parent(threadWrapper):
         threadWrapper.__init__(self, self.__function_dict, self.__events)
         ##########################################################################
         ################## set up the html page generation stuff #################
-        self.__page_generator = sensor_html_page_generator(self.__name, self.__config)
+        sensor_html_page_generator.__init__(self, self.__name, self.__config)
+        self.__html_file_path = f'templates/{self.__name}.html'
+        # we probably dont need this, but we might one day and I dont want to 
+        # debug it if we do
+        self.__html__lock = threading.Lock()
         ##########################################################################
 
 
@@ -81,24 +99,29 @@ class sensor_parent(threadWrapper):
         '''
             Returns an file path to an html file.
         '''
-        return self.__page_generator.get_html_path()
+        with self.__html__lock:
+            temp_token = self.generate_html_file(self.__html_file_path)
+        return temp_token
     def get__sensor_status(self):
         '''
             Returns the status of the sensor, it is up to the user to set this status, this function returns that status to the server. 
         '''
-        return self.__status
+        with self.__status_lock:
+            temp = self.__status
+        return temp
     def set_sensor_status(self, status):
         '''
             User calls this function to set a status, must be Running, Error, Not running.
         '''
-        if status == 'Running':
-            self.__status = status
-        elif status == 'Error':
-            self.__status = status
-        elif status == 'Not running':
-            self.__status = status
-        else :
-            raise RuntimeError(f"{status} is not a valid status.")
+        with self.__status_lock:
+            if status == 'Running':
+                self.__status = status
+            elif status == 'Error':
+                self.__status = status
+            elif status == 'Not running':
+                self.__status = status
+            else :
+                raise RuntimeError(f"{status} is not a valid status.")
     def process_data(self):
         '''
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
@@ -115,7 +138,9 @@ class sensor_parent(threadWrapper):
         '''
             This requests sends a request to the class you want and then that class creates a tap for you to listen too.
         '''
-        self.__coms.send_request(name_of_class_to_make_tap, ['create_tap', self.send_tap, self.__name])
+        with self.__name_lock:
+            temp_name_token = self.__name
+        self.__coms.send_request(name_of_class_to_make_tap, ['create_tap', self.send_tap, temp_name_token])
     def send_tap(self, data):
         '''
             This is the function that is called by the class you asked to make a tap.
@@ -123,6 +148,13 @@ class sensor_parent(threadWrapper):
         with self.__data_lock:
             self.__data_received.append(data)
         threadWrapper.set_event(self, 'data_received_event')
+    def get_taps(self):
+        '''
+            This function returns the list of requested taps 
+        '''
+        with self.__taps_lock:
+            temp = self.__taps
+        return temp
     def create_tab(self, args):
         '''
             This function creates a tab, a tab will send the data it receives from the requested class to the class that created the tab.
@@ -134,12 +166,16 @@ class sensor_parent(threadWrapper):
         '''
             This function returns the name of the sensor.
         '''
-        raise NotImplementedError("get_sensor_name Not implemented, should return a string name of the sensor.")
+        with self.__name_lock:
+            temp = self.__name
+        return temp
     def start_publisher(self):
         '''
             If it is an active publisher then we will start it on its own thread.
         '''
-        self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {self.__name}', self])
+        with self.__name_lock:
+            temp_name_token = self.__name
+        self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
 
     def publish(self):
         '''

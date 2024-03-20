@@ -21,7 +21,7 @@ class sensor_html_page_generator():
         #build page
         html = self.__soup.new_tag('html')
         head = self.__soup.new_tag('head')
-        css_link = self.__soup.new_tag('link', rel='stylesheet', href='styles.css')
+        css_link = self.__soup.new_tag('link', rel='stylesheet', href="{{ url_for('static', filename='styles.css') }}")
         head.append(css_link)
 
         # Create the head of the html document. 
