@@ -11,18 +11,24 @@ class sensor_html_page_generator():
             sensor_name : the name of the sensor, it will play into the name of the html file generated.
             config : this is the users presets they made. 
     '''
-    def __init__(self, sensor_name, config) -> None:
+    def __init__(self, sensor_name, config, graphs: bool = False) -> None:
         self.__sensor_name = sensor_name
         self.__config = config
 
+        ###################### Create page head ################################
         # Create a new BeautifulSoup object
         self.__soup = bs(features='html.parser')
 
         #build page
         html = self.__soup.new_tag('html')
         head = self.__soup.new_tag('head')
+        
         css_link = self.__soup.new_tag('link', rel='stylesheet', href="{{ url_for('static', filename='styles.css') }}")
         head.append(css_link)
+
+        script_tag_for_graphs = self.__soup.new_tag("script", **{'src' : "https://cdn.jsdelivr.net/npm/chart.js"})
+        head.append(script_tag_for_graphs)
+
 
         # Create the head of the html document. 
         title_tag = self.__soup.new_tag('title')
@@ -33,7 +39,9 @@ class sensor_html_page_generator():
         script2_tag = self.__soup.new_tag('script', src='https://code.jquery.com/jquery-3.6.4.min.js')
         head.append(script2_tag)
         html.append(head)
+        ##########################################################################
 
+        ###################### Create body title ################################
         body = self.__soup.new_tag('body')
 
         #Create the title for the page
@@ -62,7 +70,9 @@ class sensor_html_page_generator():
         div_element.append(tab4)
 
         body.append(div_element)
+        ##########################################################################
 
+        ###################### Create configuration table ################################
         #create the sensor report 
         sensor_report_tag = self.__soup.new_tag('div', **{'class' :'horizontal-container'})
         h1_title = self.__soup.new_tag('h1', **{'class' :'green-text'})
@@ -110,15 +120,68 @@ class sensor_html_page_generator():
         config_table_thead.append(tbody)
         config_table.append(config_table_thead)
         body.append(config_table)
+        ##########################################################################
 
+        ###################### Create publishing report ################################
         if self.__config['publisher'] == 'yes':
-            publisher_head = self.__soup.new_tag('h2')
+            publisher_head = self.__soup.new_tag('h2', **{'class' : 'green-text'})
             publisher_head.string = 'Last published data: '
             body.append(publisher_head)
+
+            time_pub = self.__soup.new_tag('h3', **{'id' : 'time_pub_tag','class' : 'orange-text'})
+            time_pub.string = 'NA'
+            body.append(time_pub)
+
+            data_pub = self.__soup.new_tag('h3', **{'id' : 'data_pub_tag','class' : 'orange-text'})
+            data_pub.string = 'NA'
+            body.append(data_pub)
+
+            script_published = self.__soup.new_tag("script")
+            javascript_code = f"""
+            setInterval(function() {{
+                    updateDataPublish("{self.__sensor_name}");
+                }}, 1000);
+            """
+            
+            script_published.string = javascript_code
+            body.append(script_published)
+        ##########################################################################
+
+        ###################### Create graphs #####################################
+        if graphs: 
+            #create title
+            h1_tag = self.__soup.new_tag('h1', **{'class' : 'green-text'})
+            h1_tag.string = 'Graphing report:'
+            body.append(h1_tag)
+
+            # Create a new div tag
+            new_div_tag = self.__soup.new_tag("div")
+
+            # Set attributes for the div tag
+            new_div_tag['id'] = 'graphs'
+            new_div_tag['style'] = 'display: grid; grid-template-columns: auto auto;'
+
+            body.append(new_div_tag)
+
+            script_graphs = self.__soup.new_tag("script")
+            javascript_code = f"""
+            makeGraphsSensors("{self.__sensor_name}");
+            setInterval(function() {{
+                    updateGraphsSensor("{self.__sensor_name}");
+                }}, 1000);
+            """
+            
+            script_graphs.string = javascript_code
+            body.append(script_graphs)
+        ##########################################################################
 
         # Append tags to build HTML structure
         html.append(body)
         self.__soup.append(html)
+
+        # Good debugging tool if you need it 
+        # h1_tag = self.__soup.new_tag('h1', **{'id' : "debug_box", 'class' : 'green-text'})
+        # body.append(h1_tag)
 
 
     
