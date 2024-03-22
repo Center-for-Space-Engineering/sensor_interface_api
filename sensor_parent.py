@@ -21,7 +21,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
          get_html_page : this returns a custom html page for your sensor
          set_sensor_status : Returns where the sensor is running or not. NOTE: threadWrapper has its own set_status, used by the system, so thats why the name is longer. 
          get_sensor_status : should return Running, Error, Not running. 
-         get_data : Returns the last sample the sensor returned.
+         get_data_received : Returns the last sample the sensor returned.
          get_taps : Returns a list of taps that the user has requested for this class. 
          process_data : This is the function that is called when the data_received event is called. 
          make_data_tap : sends a request to the serial listener telling it to send data to this class.
