@@ -1,5 +1,5 @@
 '''
-    This class enforces the correct structure onto the sub-sensors class.  
+    This class enforces the correct structure onto the sub-sensors class. And preforms most of the needed functions for a sensor class. 
 '''
 
 #python imports
@@ -45,7 +45,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             name : name of this sensor
             event_dict : any events the user wishes to add. 
     '''
-    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10) -> None:
+    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '') -> None:
         ###################### Sensor information ################################
         self.__coms = coms
         self.__status_lock = threading.Lock()
@@ -77,6 +77,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             'data' : 'NA'
         }
         self.__last_published_data_lock = threading.Lock()
+        self.__db_name = db_name
+        ##########################################################################
+        ################ Set up the database tables according ####################
+        if not table_structure is None:
+            self.__coms.send_request(self.__db_name, ['create_table_external', table_structure])
         ##########################################################################
         ############ Set up the sensor according to the config file ############
         if self.__config['tap_request'] is not None:
@@ -299,3 +304,13 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         with self.__last_published_data_lock:
             copy_last_data_published = copy.deepcopy(self.__last_published_data)
         return copy_last_data_published
+    def save_data(self, table, data):
+        '''
+            This function takes in a a list of data to save.
+
+            ARGS:
+                table : name of the table you want to send data to 
+                data : list of the data to store. NOTE: if you are saving into table with multiple values per row, then it should be a list of list, where each sub list is each value per row in order.
+                    Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
+        '''
+        self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
