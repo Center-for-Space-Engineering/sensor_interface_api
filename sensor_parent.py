@@ -88,13 +88,14 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 for request in self.__config['tap_request']:
                     self.make_data_tap(request)
                     self.__data_received[request] = [] #make a spot in the data received for this tap info to be added to. 
+                    
+                    # Now we need to build the event dict
+                    self.__events[f'data_received_for_{request}'] = self.process_data
                 self.__taps = self.__config['tap_request']
         else :
             self.__taps = ['None']
         if self.__config['publisher'] == 'yes':
-            if self.__config['passive_active'] == 'passive':
-                self.__events['data_received_event'] = self.process_data
-            else :
+            if self.__config['passive_active'] == 'active':
                 self.__active = True
                 self.start_publisher()
         ##########################################################################
@@ -180,7 +181,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
         with self.__data_lock:
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
-        threadWrapper.set_event(self, 'data_received_event')
+        threadWrapper.set_event(self, f'data_received_for_{sender}')
     def get_taps(self):
         '''
             This function returns the list of requested taps 
