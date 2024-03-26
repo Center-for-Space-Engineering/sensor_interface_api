@@ -1,4 +1,9 @@
 import random
+import time
+from datetime import datetime, timedelta
+import math
+import numpy as np
+import copy
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
@@ -10,6 +15,15 @@ class sobj_gps_board(sensor_parent):
         self.__graphs = ['num gps packets received']
         self.__config = sensor_config.sensors_config[self.__name]
         self.__serial_line_two_data = []
+
+        self.__parsestr = '$GPRMC'
+        self.__leapSeconds = 37 - 19
+
+        self.__secsInWeek = 604800
+        self.__secsInDay = 86400
+        self.__gpsEpoch = (1980, 1, 6, 0, 0, 0)
+
+
         # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your row information on each sub index.
         # the row structure is [<table name>, bit count (zero if you dont care), type (int, float, string, bool, bigint, byte)]
         self.__table_structure = {
@@ -28,16 +42,171 @@ class sobj_gps_board(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        y = [random.random() for _ in range(100)]
-        x = [i for i in range(100)] 
-        sensor_parent.add_graph_data(self, graph=self.__graphs[0], x=x, y=y)
-        data = [[1,2,3], [4,5,6]]
-        sensor_parent.set_publish_data(self, data=data)
-        sensor_parent.publish(self)
-        print(f'Event called: {event}')
-        print(sensor_parent.get_data_received(self, self.__config['tap_request'][0]))
-        data = {
-            'gps_packets' : ['hello', 'hello'],
-            'test_data' : [10, 10]
-        }
-        sensor_parent.save_data(self, table = f'processed_data_for_{self.__name}', data = data)
+        # y = [random.random() for _ in range(100)]
+        # x = [i for i in range(100)] 
+        # sensor_parent.add_graph_data(self, graph=self.__graphs[0], x=x, y=y)
+        # data = [[1,2,3], [4,5,6]]
+        # sensor_parent.set_publish_data(self, data=data)
+        # sensor_parent.publish(self)
+        # print(f'Event called: {event}')
+        # print(sensor_parent.get_data_received(self, self.__config['tap_request'][0]))
+        # data = {
+        #     'gps_packets' : ['hello', 'hello'],
+        #     'test_data' : [10, 10]
+        # }
+        # sensor_parent.save_data(self, table = f'processed_data_for_{self.__name}', data = data)
+        if event == 'data_received_for_serial_listener_two':
+            print('________ Called preprocess ________')
+            self.__serial_line_two_data += self.preprocess_data(sensor_parent.get_data_received(self, self.__config['tap_request'][0])) #add the received data to the list of data we have received.
+            for packet in self.__serial_line_two_data:
+                print(f"packet : ------ {packet} ------")
+    def preprocess_data(self, data):
+        found_packets = []
+        current_combined = b''  # Initialize outside the loop
+        first_pass = True
+        for sample in data:
+            if b'$' in sample:
+                temp = current_combined + sample[:sample.index(b'$')]
+                if first_pass and temp != b'': #This is to catch partial packets from the previous sample. 
+                    self.__serial_line_two_data[-1] += temp
+                else : 
+                    found_packets.append(temp) # add all the data before the $ to the previous packet
+                current_combined = sample[sample.index(b'$'):]
+                if first_pass:
+                    first_pass = False
+            else:
+                current_combined += sample
+        return found_packets
+
+
+    def split_by_length(self, s,block_size):
+        w=[]
+        n=len(s)
+        for i in range(0,n,block_size):
+            w.append(s[i:i+block_size])
+        return w
+
+
+    def gpsFromUTC(self, year, month, day, hour, minute, sec, leapSecs):
+        secFract = sec % 1
+        epochTuple = self.__gpsEpoch + (-1, -1, 0)
+        t0 = time.mktime(epochTuple)
+        t = time.mktime((year,month,day,hour,minute,sec,-1,-1,0))
+        t = t + leapSecs
+        tdiff = t - t0
+        gpsSOW = (tdiff % self.__secsInWeek) + secFract
+        gpsWeek = int(math.floor(tdiff/self.__secsInWeek))
+        gpsDay = int(math.floor(gpsSOW/self.__secsInDay))
+        gpsSOD = (gpsSOW%self.__secsInDay)
+        return(gpsWeek,gpsSOW,gpsDay,gpsSOD)
+
+    def process_gps_packets(self):
+        if recievedString.find(self.__parsestr) > -1:
+            #print recievedString
+            parsedRString = recievedString.split(',')
+
+            t = self.split_by_length(parsedRString[1],2)
+            hour = int(t[0])
+            minute = int(t[1])
+            second = int(t[2])
+
+            # print 'hour: ' + hour
+            # print 'minute: ' + minute
+            # print 'second: ' + second
+
+            
+            d = self.split_by_length(parsedRString[9],2)
+            day = int(d[0])
+            month = int(d[1])
+            year = int(d[2])
+        
+            
+            results = self.gpsFromUTC(year,month,day,hour,minute,second, self.__leapSeconds)
+
+            gpsWeek = results[0]
+            gps_MSOW = int(results[1] * 1000)
+
+
+            #print 'gpsWeek: ' + str(gpsWeek)  
+            #print 'gps_MSOW: ' + str(gps_MSOW) 
+            #print '\n'
+            
+            dataPacket = self.makePacket(gpsWeek, gps_MSOW, counter)
+            print (dataPacket)
+
+            counter+=1
+    def fletcher16(self, data, packet_length):
+        sum1 = 0
+        sum2 = 0
+
+        for byte in range(packet_length-2):
+            sum1 = (sum1+data[byte])%255
+            sum2 = (sum1 + sum2)%255
+
+        return [sum1,sum2]
+
+    def makePacket(self, week, mseconds, packetNumber):
+        byteList = []
+
+        
+        #Create Header
+
+        headerPacketCount = packetNumber
+
+        #current version is "000"
+        headerVersion = 0 
+        #1 is command, 0 is telemetry
+        headerType = 1
+        #1 says there is a secondary header
+        headerFlag = 0
+        #APID is whatever the heck yo uwant
+        headerAPID = 321
+        #this is the "11" (decimal 3) meaning the data is not broken into multiple packets
+        headerSequence = 3
+        #ome command packet has a byte of data and two of checksum, offset = 8-1 = 7
+        headerDataLength = 7
+
+        headerFlag = headerFlag << 11
+        headerType = headerType << 12
+        headerVersion = headerVersion << 13
+        ccsdsLinex00 =  hex(headerAPID | headerFlag | headerType | headerVersion)
+
+        headerSequence = headerSequence << 14
+        ccsdsLinex02 = hex(headerPacketCount | headerSequence)
+
+        ccsdsLinex04 = hex(headerDataLength)
+        
+        #print('ccsdsLinex00--------')
+        #print ccsdsLinex00
+        maskapid=0xFF
+        byteList.append(int(ccsdsLinex00,16)&maskapid)
+        byteList.append(int(ccsdsLinex00,16)>>8)
+        #print('ccsdsLinex02--------')
+        #print ccsdsLinex02
+        byteList.append(int(ccsdsLinex02,16)&maskapid)
+        byteList.append(int(ccsdsLinex02,16)>>8)
+        #print('ccsdsLinex04--------')
+        #print ccsdsLinex04
+        byteList.append(int(ccsdsLinex04,16)&maskapid)
+        byteList.append(int(ccsdsLinex04,16)>>8)
+
+
+        # convert week and mseconds
+
+        #print(week)
+        byteList.append(week&maskapid)
+        byteList.append(week>>8)
+        
+
+        #print(mseconds)
+        byteList.append(mseconds&maskapid)
+        byteList.append((mseconds>>8)&maskapid)
+        byteList.append((mseconds>>16)&maskapid)
+        byteList.append(mseconds>>24)
+
+
+        checksum = (self.fletcher16(byteList,14))
+        byteList.append(checksum[0])
+        byteList.append(checksum[1])
+
+        return(byteList)
