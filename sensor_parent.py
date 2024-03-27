@@ -39,7 +39,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
          get_graph_names : returns the list of graphs for this sensor
          get_last_published_data : returns the last thing published and the time it was published at.
          preprocess_data : this function may work for you if your data comes in in chucks, and needs to be put back together. See the function docer string. 
-         
+         set_thread_status : set the status for your processing threads. 
+
          ARGS:
             coms : the message handler, that almost every class uses in this system.
             config : the configuration created by the user. 
@@ -153,6 +154,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 self.__status = status
             else :
                 raise RuntimeError(f"{status} is not a valid status.")
+    def set_thread_status(self, status):
+        '''
+            This function is for setting the threading status AKA your processing threads that get started. USE 'Running', 'Complete' or 'Error'.
+        '''
+        threadWrapper.set_status(self, status)
     def process_data(self):
         '''
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole

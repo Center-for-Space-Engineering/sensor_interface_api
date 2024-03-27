@@ -7,8 +7,8 @@ import threading
 import copy
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
-from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
-from sensor_interface_api import system_constants as sensor_config # pylint: disable=e0401
+import system_constants as sensor_config # pylint: disable=e0401
+from DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
 
 class sobj_gps_board(sensor_parent):
     def __init__(self, coms):
@@ -30,6 +30,7 @@ class sobj_gps_board(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, graphs=self.__graphs, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
+
     def process_data(self, event):
         '''
             This function gets called when one of the tap request gets any data. 
@@ -62,6 +63,7 @@ class sobj_gps_board(sensor_parent):
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
         '''
+        sensor_parent.set_thread_status(self, 'Running')
         with self.__data_lock: #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
 
@@ -73,37 +75,44 @@ class sobj_gps_board(sensor_parent):
         processed_packets = 0
 
         for packet in temp_data_structure:
-            packet = packet.decode('utf-8') #Turn our byte object into a string
-            if parsestr in packet and packet_terminator in packet:
-                parsedRString = packet.split(',')
-                print(parsedRString)
+            try :
+                packet = packet.decode('utf-8') #Turn our byte object into a string
+                if parsestr in packet and packet_terminator in packet:
+                    parsedRString = packet.split(',')
+                    # print(parsedRString)
 
-                t = self.split_by_length(parsedRString[1],2)
-                hour = int(t[0])
-                minute = int(t[1])
-                second = int(t[2])
+                    t = self.split_by_length(parsedRString[1],2)
+                    hour = int(t[0])
+                    minute = int(t[1])
+                    second = int(t[2])
+                    
+                    d = self.split_by_length(parsedRString[9],2)
+                    day = int(d[0])
+                    month = int(d[1])
+                    year = int(d[2])
                 
-                d = self.split_by_length(parsedRString[9],2)
-                day = int(d[0])
-                month = int(d[1])
-                year = int(d[2])
-            
-                
-                results = self.gpsFromUTC(year,month,day,hour,minute,second, leapSeconds)
+                    
+                    results = self.gpsFromUTC(year,month,day,hour,minute,second, leapSeconds)
 
-                gpsWeek = results[0]
-                gps_MSOW = int(results[1] * 1000)
-                
-                dataPacket = self.makePacket(gpsWeek, gps_MSOW, counter)
-                print (dataPacket)
+                    gpsWeek = results[0]
+                    gps_MSOW = int(results[1] * 1000)
+                    
+                    dataPacket = self.makePacket(gpsWeek, gps_MSOW, counter)
+                    # print (dataPacket)
 
-                counter+=1
-                processed_packets += 1
+                    counter+=1
+                    processed_packets += 1
 
-            if packet_terminator in packet:
+                if packet_terminator in packet:
+                    processed_packets += 1
+            except :
+                #bad packet 
+                dto = print_message_dto(f'Bad packet received. For {self.__name}')
+                self.__coms.print_message(dto, 2)
                 processed_packets += 1
         with self.__data_lock: #update the list with unprocessed packets. 
             self.__serial_line_two_data = self.__serial_line_two_data[processed_packets:]
+        sensor_parent.set_thread_status(self, 'Complete')
     def fletcher16(self, data, packet_length):
         '''
             Checksum algro 
