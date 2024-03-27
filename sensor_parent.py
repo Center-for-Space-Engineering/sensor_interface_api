@@ -38,7 +38,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
          get_data_report : returns the data report to the webpage
          get_graph_names : returns the list of graphs for this sensor
          get_last_published_data : returns the last thing published and the time it was published at.
-
+         preprocess_data : this function may work for you if your data comes in in chucks, and needs to be put back together. See the function docer string. 
+         
          ARGS:
             coms : the message handler, that almost every class uses in this system.
             config : the configuration created by the user. 
@@ -315,3 +316,30 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
+    def preprocess_data(self, data, delimiter:bytearray):
+        '''
+            This function will go through your data and find the delimiter you gave the function, and then put messages together.
+            Example delimiter = b'$'
+            data = '$hello$world'
+            return ['$hello', '$world']
+
+            If your data follows this structure this function will work well. However, if your data does not have a delimiter or header,
+            this function will not work for your needs.  
+        '''
+        found_packets = []
+        current_combined = b''  # Initialize outside the loop
+        first_pass = True
+        for sample in data:
+            if delimiter in sample:
+                temp = current_combined + sample[:sample.index(delimiter)]
+                if first_pass and temp != b'': #This is to catch partial packets from the previous sample.
+                    found_packets.append(temp)
+                else : 
+                    found_packets.append(temp) # add all the data before the $ to the previous packet
+                current_combined = sample[sample.index(delimiter):]
+                if first_pass:
+                    first_pass = False
+            else:
+                current_combined += sample
+        found_packets.append(current_combined) #add a partial packet
+        return found_packets
