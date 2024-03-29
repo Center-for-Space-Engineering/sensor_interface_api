@@ -8,7 +8,7 @@ import copy
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
-from DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
+from logging_system_display_python_api.DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
 
 class sobj_gps_board(sensor_parent):
     def __init__(self, coms):
