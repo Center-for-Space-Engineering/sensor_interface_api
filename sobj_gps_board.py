@@ -63,6 +63,7 @@ class sobj_gps_board(sensor_parent):
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
         '''
+        
         sensor_parent.set_thread_status(self, 'Running')
         with self.__data_lock: #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
@@ -78,6 +79,8 @@ class sobj_gps_board(sensor_parent):
             try :
                 packet = packet.decode('utf-8') #Turn our byte object into a string
                 if parsestr in packet and packet_terminator in packet:
+                    print('Here')
+
                     parsedRString = packet.split(',')
                     # print(parsedRString)
 
@@ -113,18 +116,20 @@ class sobj_gps_board(sensor_parent):
         with self.__data_lock: #update the list with unprocessed packets. 
             self.__serial_line_two_data = self.__serial_line_two_data[processed_packets:]
         sensor_parent.set_thread_status(self, 'Complete')
-    def fletcher16(self, data, packet_length):
-        '''
-            Checksum algro 
-        '''
-        sum1 = 0
-        sum2 = 0
 
-        for byte in range(packet_length-2):
-            sum1 = (sum1+data[byte])%255
-            sum2 = (sum1 + sum2)%255
-
-        return [sum1,sum2]
+    def crc16(data : bytearray, offset , length):
+        if data is None or offset < 0 or offset > len(data)- 1 and offset+length > len(data):
+            return 0
+        crc = 0xFFFF
+        for i in range(0, length):
+            crc ^= data[offset + i] << 8
+            for j in range(0,8):
+                if (crc & 0x8000) > 0:
+                    crc =(crc << 1) ^ 0x1021
+                else:
+                    crc = crc << 1
+        return crc & 0xFFFF
+    
     def makePacket(self, week, mseconds, packetNumber):
         '''
             This makes a ccsds packet from the give args. (returns byte array)
@@ -144,55 +149,52 @@ class sobj_gps_board(sensor_parent):
         headerType = 1
         #1 says there is a secondary header
         headerFlag = 0
-        #APID is whatever the heck yo uwant
-        headerAPID = 321
+        #APID is whatever the heck you want
+        headerAPID = 276
         #this is the "11" (decimal 3) meaning the data is not broken into multiple packets
         headerSequence = 3
         #ome command packet has a byte of data and two of checksum, offset = 8-1 = 7
         headerDataLength = 7
 
-        headerFlag = headerFlag << 11
-        headerType = headerType << 12
-        headerVersion = headerVersion << 13
-        ccsdsLinex00 =  hex(headerAPID | headerFlag | headerType | headerVersion)
+        headerFlag = headerFlag << 3
+        headerType = headerType << 4
+        headerVersion = headerVersion << 5
+        ccsdsLinex00 =  hex(headerAPID >> 8 | headerFlag | headerType | headerVersion)
+        ccsdsLinex01 =  hex(headerAPID & 0xFF)
 
-        headerSequence = headerSequence << 14
-        ccsdsLinex02 = hex(headerPacketCount | headerSequence)
+        headerSequence = headerSequence << 6
+        ccsdsLinex02 = hex(headerPacketCount >> 8| headerSequence)
+        ccsdsLinex03 = hex(headerPacketCount & 0xFF)
 
-        ccsdsLinex04 = hex(headerDataLength)
+        ccsdsLinex04 = hex(headerDataLength >> 8)
+        ccsdsLinex05 = hex(headerDataLength & 0xFF)
         
         #print('ccsdsLinex00--------')
-        #print ccsdsLinex00
-        maskapid=0xFF
-        byteList.append(int(ccsdsLinex00,16)&maskapid)
-        byteList.append(int(ccsdsLinex00,16)>>8)
-        #print('ccsdsLinex02--------')
-        #print ccsdsLinex02
-        byteList.append(int(ccsdsLinex02,16)&maskapid)
-        byteList.append(int(ccsdsLinex02,16)>>8)
-        #print('ccsdsLinex04--------')
-        #print ccsdsLinex04
-        byteList.append(int(ccsdsLinex04,16)&maskapid)
-        byteList.append(int(ccsdsLinex04,16)>>8)
-
-
-        # convert week and mseconds
-
-        #print(week)
-        byteList.append(week&maskapid)
-        byteList.append(week>>8)
+        ccsdsPacket = ccsdsLinex00 << (13 * 8)
+        ccsdsPacket |= ccsdsLinex01 << (12 * 8)
+        ccsdsPacket |= ccsdsLinex02 << (11 * 8)
+        ccsdsPacket |= ccsdsLinex03 << (10 * 8)
+        ccsdsPacket |= ccsdsLinex04 << (9 * 8)
+        ccsdsPacket |= ccsdsLinex05 << (8 * 8)
         
+        # convert week and mseconds
+        ccsdsPacket |= ((week&0xff00) << (6 * 8)) # NOTE:   Because we got the top 8 bits we only shift by 6.
+        ccsdsPacket |= ((week&0x00ff) << (6 * 8))
 
-        #print(mseconds)
-        byteList.append(mseconds&maskapid)
-        byteList.append((mseconds>>8)&maskapid)
-        byteList.append((mseconds>>16)&maskapid)
-        byteList.append(mseconds>>24)
+        ccsdsPacket |= ((mseconds&0xff000000) << (2 * 8)) # NOTE:   Because we got the top 8 bits we only shift by 2.
+        ccsdsPacket |= ((mseconds&0x00ff0000) << (2 * 8))
+        ccsdsPacket |= ((mseconds&0x0000ff00) << (2 * 8))
+        ccsdsPacket |= ((mseconds&0x000000ff) << (2 * 8))
+
+        checksum_pack = list(hex(ccsdsPacket >> (2 * 8), 11))
 
 
-        checksum = (self.fletcher16(byteList,14))
-        byteList.append(checksum[0])
-        byteList.append(checksum[1])
+        checksum = (self.crc16(checksum_pack,0, len(checksum_pack)))
+        ccsdsPacket |= ((checksum&0xff00))
+        ccsdsPacket |= ((checksum&0x00ff))
+
+        print(ccsdsPacket)
+        
 
         return(byteList)
     def split_by_length(self, s,block_size):
