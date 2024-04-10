@@ -51,7 +51,7 @@ class sobj_gps_board(sensor_parent):
         # }
         # sensor_parent.save_data(self, table = f'processed_data_for_{self.__name}', data = data)
         if event == 'data_received_for_serial_listener_two':
-            temp = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=b'$') #add the received data to the list of data we have received.
+            temp = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag']) #add the received data to the list of data we have received.
             with self.__data_lock:
                 if len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )

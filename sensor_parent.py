@@ -172,7 +172,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS:
                 tap_name : the name of the tap you want to get data out of. 
         '''
-        with self.__publish_data_lock:
+        with self.__data_lock:
             data_copy = copy.deepcopy(self.__data_received[tap_name])
         return data_copy
     def make_data_tap(self, name_of_class_to_make_tap):
@@ -293,7 +293,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 self.__data_report[graph]['y'].pop(0)
     def get_data_report(self):
         '''
-            Returns a copy ofg the data report to the requester. 
+            Returns a copy of the data report to the requester. 
         '''
         with self.__data_report_lock:
             copy_data_report = copy.deepcopy(self.__data_report)
