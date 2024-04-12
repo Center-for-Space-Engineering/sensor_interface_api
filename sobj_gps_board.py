@@ -1,8 +1,9 @@
-import random
+'''
+    This module handles the incoming data from the gps board, process it and then makes a packet and publishes the gps time packet.
+'''
+
 import time
-from datetime import datetime, timedelta
 import math
-import numpy as np
 import threading
 import copy
 
@@ -11,24 +12,27 @@ import system_constants as sensor_config # pylint: disable=e0401
 from logging_system_display_python_api.DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
 
 class sobj_gps_board(sensor_parent):
+    '''
+        This models handles incoming gps data and then makes it into a gps time packet.
+    '''
     def __init__(self, coms):
         self.__name = 'gps_board'
-        self.__graphs = ['num gps packets received']
         self.__config = sensor_config.sensors_config[self.__name]
         self.__serial_line_two_data = []
         self.__data_lock = threading.Lock()
         self.__coms = coms
+        self.__packet_number = 0
+        self.__packet_number_lock = threading.Lock()
+
 
         # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your row information on each sub index.
         # the row structure is [<table name>, bit count (zero if you dont care), type (int, float, string, bool, bigint, byte)]
         self.__table_structure = {
-            f'processed_data_for_{self.__name}' : [['gps_packets', 0, 'string'], ['test_data', 10, 'int']],
-            f'processed_data_for_{self.__name}_table_2' : [['gps_packets', 0, 'string'], ['test_data', 10, 'int']],
-
+            f'processed_data_for_{self.__name}' : [['gps_packets', 13, 'byte']],
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
-        sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, graphs=self.__graphs, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
+        sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
 
     def process_data(self, event):
@@ -37,19 +41,6 @@ class sobj_gps_board(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        # y = [random.random() for _ in range(100)]
-        # x = [i for i in range(100)] 
-        # sensor_parent.add_graph_data(self, graph=self.__graphs[0], x=x, y=y)
-        # data = [[1,2,3], [4,5,6]]
-        # sensor_parent.set_publish_data(self, data=data)
-        # sensor_parent.publish(self)
-        # print(f'Event called: {event}')
-        # print(sensor_parent.get_data_received(self, self.__config['tap_request'][0]))
-        # data = {
-        #     'gps_packets' : ['hello', 'hello'],
-        #     'test_data' : [10, 10]
-        # }
-        # sensor_parent.save_data(self, table = f'processed_data_for_{self.__name}', data = data)
         if event == 'data_received_for_serial_listener_two':
             temp = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag']) #add the received data to the list of data we have received.
             with self.__data_lock:
@@ -58,7 +49,7 @@ class sobj_gps_board(sensor_parent):
                     self.__serial_line_two_data += temp[1:]
                 else :
                     self.__serial_line_two_data += temp
-                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} for event data_received_for_serial_listener_two', self, [len(self.__serial_line_two_data)]]) #start a thread to process data
+                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [len(self.__serial_line_two_data)]]) #start a thread to process data
     def process_gps_packets(self, num_packets):
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
@@ -71,18 +62,15 @@ class sobj_gps_board(sensor_parent):
         parsestr = '$GPRMC'
         leapSeconds = 37 - 19
         packet_terminator = '\r\n'
-        counter = 0
 
         processed_packets = 0
+        processed_packets_list = []
 
         for packet in temp_data_structure:
             try :
                 packet = packet.decode('utf-8') #Turn our byte object into a string
                 if parsestr in packet and packet_terminator in packet:
-                    print('Here')
-
                     parsedRString = packet.split(',')
-                    # print(parsedRString)
 
                     t = self.split_by_length(parsedRString[1],2)
                     hour = int(t[0])
@@ -100,30 +88,46 @@ class sobj_gps_board(sensor_parent):
                     gpsWeek = results[0]
                     gps_MSOW = int(results[1] * 1000)
                     
-                    dataPacket = self.makePacket(gpsWeek, gps_MSOW, counter)
-                    # print (dataPacket)
+                    with self.__packet_number_lock:
+                        copy_packet_num = self.__packet_number
+                    dataPacket = self.makePacket(gpsWeek, gps_MSOW, copy_packet_num)
+                    processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 
-                    counter+=1
+                    with self.__packet_number_lock:
+                        self.__packet_number+=1
                     processed_packets += 1
 
                 if packet_terminator in packet:
                     processed_packets += 1
-            except :
+            except Exception as e: # pylint: disable=w0718
                 #bad packet 
-                dto = print_message_dto(f'Bad packet received. For {self.__name}')
+                dto = print_message_dto(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 self.__coms.print_message(dto, 2)
                 processed_packets += 1
         with self.__data_lock: #update the list with unprocessed packets. 
             self.__serial_line_two_data = self.__serial_line_two_data[processed_packets:]
-        sensor_parent.set_thread_status(self, 'Complete')
+        
+        #save the data to the database
+        data = {
+            'gps_packets' : processed_packets_list,
+        }
+        sensor_parent.save_byte_data(self, table=f'processed_data_for_{self.__name}', data=data)
 
-    def crc16(data : bytearray, offset , length):
+        #now we need to publish the data NOTE: remember we are a passive sensor. 
+        sensor_parent.set_publish_data(self, data=data)
+        sensor_parent.publish(self)
+
+        sensor_parent.set_thread_status(self, 'Complete')
+    def crc16(self, data : bytearray, offset , length):
+        '''
+            Make check sum for the packet.
+        '''
         if data is None or offset < 0 or offset > len(data)- 1 and offset+length > len(data):
             return 0
         crc = 0xFFFF
         for i in range(0, length):
             crc ^= data[offset + i] << 8
-            for j in range(0,8):
+            for _ in range(0,8):
                 if (crc & 0x8000) > 0:
                     crc =(crc << 1) ^ 0x1021
                 else:
@@ -136,8 +140,6 @@ class sobj_gps_board(sensor_parent):
             
             TODO: add sync word
         '''
-        byteList = []
-
         
         #Create Header
 
@@ -159,15 +161,15 @@ class sobj_gps_board(sensor_parent):
         headerFlag = headerFlag << 3
         headerType = headerType << 4
         headerVersion = headerVersion << 5
-        ccsdsLinex00 =  hex(headerAPID >> 8 | headerFlag | headerType | headerVersion)
-        ccsdsLinex01 =  hex(headerAPID & 0xFF)
+        ccsdsLinex00 =  headerAPID >> 8 | headerFlag | headerType | headerVersion
+        ccsdsLinex01 =  headerAPID & 0xFF
 
         headerSequence = headerSequence << 6
-        ccsdsLinex02 = hex(headerPacketCount >> 8| headerSequence)
-        ccsdsLinex03 = hex(headerPacketCount & 0xFF)
+        ccsdsLinex02 = headerPacketCount >> 8| headerSequence
+        ccsdsLinex03 = headerPacketCount & 0xFF
 
-        ccsdsLinex04 = hex(headerDataLength >> 8)
-        ccsdsLinex05 = hex(headerDataLength & 0xFF)
+        ccsdsLinex04 = headerDataLength >> 8
+        ccsdsLinex05 = headerDataLength & 0xFF
         
         #print('ccsdsLinex00--------')
         ccsdsPacket = ccsdsLinex00 << (13 * 8)
@@ -186,17 +188,16 @@ class sobj_gps_board(sensor_parent):
         ccsdsPacket |= ((mseconds&0x0000ff00) << (2 * 8))
         ccsdsPacket |= ((mseconds&0x000000ff) << (2 * 8))
 
-        checksum_pack = list(hex(ccsdsPacket >> (2 * 8), 11))
-
+        # checksum_pack = list(hex(ccsdsPacket >> (2 * 8), 11))
+        # Convert the integer to a byte array
+        checksum_pack = ccsdsPacket.to_bytes((ccsdsPacket.bit_length() + 7) // 8, 'big')
 
         checksum = (self.crc16(checksum_pack,0, len(checksum_pack)))
         ccsdsPacket |= ((checksum&0xff00))
         ccsdsPacket |= ((checksum&0x00ff))
-
-        print(ccsdsPacket)
         
 
-        return(byteList)
+        return ccsdsPacket
     def split_by_length(self, s,block_size):
         '''
             split the data. Pulling out the data and time (UTC) from gps sentence. 
@@ -224,5 +225,5 @@ class sobj_gps_board(sensor_parent):
         gpsSOW = (tdiff % secsInWeek) + secFract
         gpsWeek = int(math.floor(tdiff/secsInWeek))
         gpsDay = int(math.floor(gpsSOW/secsInDay))
-        gpsSOD = (gpsSOW%secsInDay)
-        return(gpsWeek,gpsSOW,gpsDay,gpsSOD)
+        gpsSOD = gpsSOW%secsInDay
+        return (gpsWeek,gpsSOW,gpsDay,gpsSOD)

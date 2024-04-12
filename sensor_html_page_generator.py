@@ -11,7 +11,7 @@ class sensor_html_page_generator():
             sensor_name : the name of the sensor, it will play into the name of the html file generated.
             config : this is the users presets they made. 
     '''
-    def __init__(self, sensor_name, config, graphs: bool = False) -> None:
+    def __init__(self, sensor_name, config, graphs: bool = False) -> None: # pylint: disable=r0915
         self.__sensor_name = sensor_name
         self.__config = config
 
@@ -80,7 +80,7 @@ class sensor_html_page_generator():
         sensor_report_tag.append(h1_title)
         body.append(sensor_report_tag)
 
-        sensor_config_tag = (self.__soup.new_tag('div', **{'class' :'horizontal-container'}))
+        sensor_config_tag = self.__soup.new_tag('div', **{'class' :'horizontal-container'})
         h2_report_title = self.__soup.new_tag('h2', **{'class' :'orange-text'})
         h2_report_title.string = 'Configurations: '
         sensor_config_tag.append(h2_report_title)
@@ -197,11 +197,3 @@ class sensor_html_page_generator():
             file.write(self.__soup.prettify())
 
         return file_path
-
-if __name__ == '__main__':
-    config = {
-        'publisher': 'yes',
-        'Hello world' : 'NO way bio'
-    }
-    generator = sensor_html_page_generator('test sensor', config)
-    html_file_path = generator.generate_html_file('temperature_sensor.html')

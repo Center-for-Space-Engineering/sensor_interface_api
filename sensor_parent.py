@@ -40,6 +40,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
          get_last_published_data : returns the last thing published and the time it was published at.
          preprocess_data : this function may work for you if your data comes in in chucks, and needs to be put back together. See the function docer string. 
          set_thread_status : set the status for your processing threads. 
+         get_data_name : return data name
+         save_byte_data : saves byte data into the database.
+         save_data : saves data into the database.
 
          ARGS:
             coms : the message handler, that almost every class uses in this system.
@@ -47,15 +50,17 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             name : name of this sensor
             event_dict : any events the user wishes to add. 
     '''
-    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '') -> None:
+    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '') -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
         self.__coms = coms
         self.__status_lock = threading.Lock()
         self.__status = "Not Running"
         self.__data_received = {}
         self.__data_lock = threading.Lock()
-        self.__tab_requests = []
+        self.__tap_requests = []
+        self.__tap_requests_lock = threading.Lock()
         self.__config = config
+        self.__config_lock = threading.Lock()
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
         self.__publish_data = []
@@ -87,13 +92,13 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         ##########################################################################
         ############ Set up the sensor according to the config file ############
         if self.__config['tap_request'] is not None:
-                for request in self.__config['tap_request']:
-                    self.make_data_tap(request)
-                    self.__data_received[request] = [] #make a spot in the data received for this tap info to be added to. 
-                    
-                    # Now we need to build the event dict
-                    self.__events[f'data_received_for_{request}'] = self.process_data
-                self.__taps = self.__config['tap_request']
+            for request in self.__config['tap_request']:
+                self.make_data_tap(request)
+                self.__data_received[request] = [] #make a spot in the data received for this tap info to be added to. 
+
+                # Now we need to build the event dict
+                self.__events[f'data_received_for_{request}'] = self.process_data
+            self.__taps = self.__config['tap_request']
         else :
             self.__taps = ['None']
         if self.__config['publisher'] == 'yes':
@@ -202,7 +207,10 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS:
                 args[0] : tab function to call.  
         '''
-        self.__tab_requests.append(args[0])
+        with self.__tap_requests_lock:
+            self.__tap_requests.append(args[0])
+        with self.__config_lock:
+            self.__config['subscribers'] = self.__tap_requests
     def get_sensor_name(self):
         '''
             This function returns the name of the sensor.
@@ -229,24 +237,34 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             while True:
                 with self.__publish_data_lock:
                     data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-                for subscriber in self.__tab_requests:
+                with self.__tap_requests_lock:
+                    tap_request_copy = copy.deepcopy(self.__tap_requests)
+                for subscriber in tap_request_copy:
                     temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
                     subscriber.send_tap(temp)
                 with self.__last_published_data_lock:
                     self.__last_published_data['time'] = str(datetime.now())
-                    self.__last_published_data['data'] = ' , '.join(data_copy[-1])
+                    try :
+                        self.__last_published_data['data'] = ' , '.join(data_copy[-1])
+                    except : # pylint: disable=w0702
+                        self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
                 with self.__has_been_published_lock:
                     self.__has_been_published = True
                 time.sleep(interval_pub)
         else :
             with self.__publish_data_lock:
                 data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-            for subscriber in self.__tab_requests:
+            with self.__tap_requests_lock:
+                tap_request_copy = copy.deepcopy(self.__tap_requests)
+            for subscriber in tap_request_copy:
                 temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
                 subscriber.send_tap(temp)
             with self.__last_published_data_lock:
                 self.__last_published_data['time'] = str(datetime.now())
-                self.__last_published_data['data'] = ' , '.join(map(str,data_copy[-1]))
+                try:
+                    self.__last_published_data['data'] = ' , '.join(map(str,data_copy[-1]))
+                except : # pylint: disable=w0702
+                    self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
         with self.__has_been_published_lock:
             self.__has_been_published = True
     def set_publish_data(self, data):
@@ -263,6 +281,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         with self.__has_been_published_lock:
             self.__has_been_published = False
     def has_been_published(self):
+        '''
+            This returns a boolean about where or not the last message has been published. 
+        '''
         with self.__has_been_published_lock:
             copy_token = self.__has_been_published
         return copy_token
@@ -314,7 +335,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         return copy_last_data_published
     def save_data(self, table, data):
         '''
-            This function takes in a a list of data to save.
+            This function takes in a dict of data to save. NO byte data
 
             ARGS:
                 table : name of the table you want to send data to 
@@ -322,6 +343,18 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
+    def save_byte_data(self, table, data):
+        '''
+            This function takes in a dict of data to save, but can contain byte data
+
+            ARGS:
+                table : name of the table you want to send data to 
+                data : list of the data to store. NOTE: if you are saving into table with multiple values per row, then it should be a list of list, where each sub list is each value per row in order.
+                    Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
+        '''
+        self.__coms.send_request('Data Base', ['save_byte_data', table, data, self.__name])
+
+
     def preprocess_data(self, data, delimiter:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.
@@ -349,3 +382,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 current_combined += sample
         found_packets.append(current_combined) #add a partial packet
         return found_packets
+    def get_data_name(self):
+        '''
+            This function returns the name of the data that this class publishes
+        '''
+        return self.__data_name

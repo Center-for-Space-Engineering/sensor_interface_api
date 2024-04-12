@@ -1,156 +1,12 @@
 # How to work with the CSE simulator code
 In this document I will go through a few examples on how to add functionality to the CSE simulator. The following examples will be covered.
-- Adding commands to the server.
 - Sending requests to threads.
 - Creating a new process and then running it with the parallel architecture.
 - Requesting and Inserting data in to the Database.
 - Working with the logging system.
-- Adding New serial lines to the system.
 - Adding Sensors to the system.
 
 Note: When ever you are adding code to the CSE simulator, please make sure to lint your code. All of the `README.md` have instructions for doing this. By doing this you will help future developers be able to read your code. This is not consider optional for CSE coding standers, and must be complete before you push your code to `git`. 
-
-# How to add new commands to the server.
-## Architecture Description:
-Inside the host folder you will see python files that start with `cmd_`. This prefix tells the server that this is a command and needs to be added into the Architecture at run time. These python class should inherit from the `commandParent.py`. This class has all the basic functions that a command class needs. It is left up to the user to implement these functions. However the `commandParent.py` will help the user structure their code in the correct way.
-
-Note: This example is best understood if you are looking at `src\host\cmd_example.py` while reading though it. 
-
-## Steps:
-1. First create a file that follows the correct format `cmd__name_of_new_class`. Make sure you class declaration matches the name of the file.
-Note: I recommend copying the `cmd_example.py` file. You do not have to do this, but I believe it is easier to start from here. Consider the following example. \
-File name: `cmd_example.py`
-```python
-    from commandParent import commandParent # pylint: disable=e0401
-
-    class cmd_example(commandParent):
-        ...
-```
-2. The `__init__` function:
-```python
-       def __init__(self, CMD, coms):
-            ...
-```
- - CMD: This is the object that ties everything to the server.
- - coms: This object handles all the internal communications.
- - The `__init__` function gets called when the class is created. 
- - First you need to call the `super().__init__(cmd=CMD, coms=coms, called_by_child=True)` this creates the parent class.
- - Create a variable called `self.__commandName`, this tells the server what to call this command.
- - Create an `self.__args = {}`: This is a dictionary of functions you want the server to be able to call. The key in the dictionary is what the server calls. The value for that key should be a function pointer. Note: this is the function the server will call.
- - The following lines are mandatory. They are what actually tie things to the server.
-    ```python
-        dictCmd = CMD.get_command_dict()
-        dictCmd[self.__commandName] = self
-        CMD.setCommandDict(dictCmd)
-    ```
- - Save the coms object. Do something like the following `self.__coms = coms`.
-
-- Note: Sometimes the user may want to have a class that has more args on its `__init__` function. This is possible if the user simply edits the `cmd_inter.py` class. Here is an example. \
-The `cmd_data_collector.py` wants the database as an argument as well. Here is how we add that functionality to the server. 
-    ```python
-        def collect_commands(self, db):
-            '''
-                This fuc creates the dynamicImporter (spelled wrong, call it my programming style), after the dynamicImporter goes through the folder searching for any extra commands it adds them into the __commandDict so that the server can leverage them.
-            '''
-            x = dynamicImporter(self.__coms)
-            moduleList = x.get_mod_list()
-
-            for obj in moduleList: #if you want to add any args to the __init__ function other than cmd you will have to change the code in this for loop. I recommend you just use setters. Or find a way not to use them at all.  
-                if 'cmd_data_collector' in str(obj):
-                    _ = obj(self, self.__coms, db) #Here I need the data base reference for the data base collector class
-                else :
-                    _ = obj(self, self.__coms) #the reason why I pass cmd into the new class is so that the class can define its own command names and structures.
-    ```
-You do not need to change the whole function, just add a `elif <condition>:` to the for loop. 
-- Note: you may need to pass in additional arguments to the function. 
-
-
-3. Create the run functions:
-  - In most cases the same implementations of `run` and `run_args` in the `cmd_example.py` will work. If you need to customize these further it is left up to the user to do that. However I will give a quick description of the functions.
-  - Description: The basic architecture of the `run` functions is simple: it just gets called if no arguments are passed to the server call. The `run_args` calls a function name given to it, and then passes args into that function. It uses the `self.__args` variable to call the functions.
-  Note: In most cases the `run_args` is what you want. The `run` function is meant for commands that should be executed right away with not arguments.
-
-4. In this step the user should define their own functions. Each of these functions should be added to the `self.__args` dictionary when it is created in the `__init__` function.
-Note: If the function has arguments, the server will pass the argument to your function in a list format. Consider the following example.
-```python
-    def example_fun(self, args):
-        argument1 = args[1]
-        argument2 = args[2]
-        argument3 = args[3]
-```
-In this example you can see how you can extract arguments passed by the server. Note: that `args[0]` is not used because it is the function name.\
-Note: In some cases you will not want to pass any arguments to your function. The server will still pass an list with only the function name to your function. Therefore you should add the `_` to your function call to avoid a runtime crash. Consider the following example. 
-```python
- def my_func_with_no_args(self, _):
-    ...
-```
-Note: In most cases all your functions will only need to return a string. 
-Note: If the user wishes to download a file as part of the function this can be done simply but setting some arguments on the return value. Consider the following example. 
-```python
-return {
-        'text_data': f'The last line fetched was {last_db_index}',
-        'file_data': dto,
-        'download': 'yes',
-        'file_extension' : 'txt', 
-    }
-```
-- `text_data`: This argument is what shows up on webpage as what the command returns. 
-- `file_data`: This argument is the data that will be downloaded to the users computer. 
-- `download` : if the arg is `yes` this tells the web page to download the information. 
-
-Note: if you wish to download bin data here is an example:
-```python
-    import base64
-    ...
-
-    base64_data_combined = base64.b64encode(data_combined).decode('utf-8')
-    return {
-        'text_data': f'The last line fetched was {last_db_index}',
-        'file_data': base64_data_combined,
-        'download': 'yes',
-        'file_extension' : 'bin', 
-    }
-```
-Note: you MUST do the encoding on the bin data. 
-
-Note: That the users wishes to return a `.bin` file. Also note that the `file_data` has to be encoded in the correct why or it will not work. 
-
-5. Implement the `get_args`, this function loops through each key in the `self.__args` dictionary.
- - Note: In many cases your functions will need arguments. I recommend adding something like the following. To convey to the user what the args are.
-    ```python
-        message = ""
-        for key in self.__args:
-            if key == 'some key':
-                message += f"<url>/{self.__commandName}/{key}/-add your args here-</url><p></p>"
-            else :
-                message += f"<url>/{self.__commandName}/{key}</url><p></p>"
-        return message
-    ```
-    Note: I have been putting args in between `-` as a way to show to the user that these are args.
- - Implement the `get_args_server`.
-  - Note: As with before in many cases your functions will need arguments. I recommend adding something like the following. To convey to the user what the args are.
-    ```python
-        message = []
-        for key in self.__args:
-            if key == 'some key':
-                message.append({
-                'Name' : key,
-                'Path' : f'/{self.__commandName}/{key}/-add your args here-',
-                'Description' : 'Add description of the function here'    
-                })
-            else :
-                message.append({
-                'Name' : key,
-                'Path' : f'/{self.__commandName}/{key}',
-                'Description' : 'Add description of the function here'    
-                })
-        return message
-    ```
-6. Finally implement a to string function. In most cases the following implementation will be sufficient.
-    ```python
-    def __str__(self):
-        return self.__commandName
-    ```
 
 # How to send a request to threads.
 ## Architecture Description:
@@ -276,6 +132,12 @@ Note: This call is for inserting a single row of data.
                 args[1] : dict of data to store
                 args[2] : thread id (used for reporting)
 ```
+```python
+    data_dict = {
+        'felid_name' : [... data list ...]
+    }
+    self.__coms.send_request('Data Base', ['save_data_group', self.__thread_name, data_dict, self.__thread_name])
+```
 3. `save_byte_data`: This function is for saving raw binary data. Here is the function docer string.
 ```
     This function is in charge of saving byte data (VARBINARY)
@@ -286,9 +148,17 @@ Note: This call is for inserting a single row of data.
 
             args:
                 [0] : table name
-                [1] : list of bytes
+                [1] : dictionary of data to save, where the key is the name of the felid, and the mapped value is a list of bytes. 
                 [2] : caller thread name
 ```
+Example :
+```python
+    data_dict = {
+        'felid_name' : [... byte list ... ]
+    }
+    self.__coms.send_request('Data Base', ['save_byte_data', self.__thread_name, data_dict, self.__thread_name])
+```
+NOTE: You can only have single column tables with byte data. 
 ## Request Data
 There are two function to call for requesting data.
 1. `get_data`: This is a slow function. It takes a starting index and requests EVERYTHING after that. I would recommend only using this for debugging. Here is the function docer string.
@@ -357,55 +227,6 @@ There are a number of different logs you can send, here is a list.
 - Note: In this case no `DTO` is needed. This is an effort to keep things simpler for the user. 
 Note: Not all `DTO` types work with all the logger types. Please take care what you pass to the logger. 
 
-
-## Adding New serial lines to the system:
-## Architecture Description:
-There are 2 basic steps for adding serial ports to the code. 
-1. Enable them on the pi
-2. Add them to the code.
-
-
-### Step one:
-The Raspberry pi 4b has 5 Uart lines.
-| NAME  | TYPE |
-| ----- | ----- |
-| UART0 | PL011 |
-| UART1 | mini UART |
-| UART2 | PL011 |
-| UART3 | PL011 |
-| UART4 | PL011 |
-| UART5 | PL011 |
-
-NOTE: Each uart has 4 pins assign to it. The first to are TX and RX and the last two are for multi device uart. \
-mini uart does not work with the interface I have set up. However, it would be possible to figure out how to make it work.\
-In order to see what pins the uart is using run the following command 'dtoverlay -h uart2'. \
-In order to use the additional uart you first need to enable it, by doing the following. \
-first: add it to the '/boot/config.txt' try running  vim /boot/config.txt, or nano /boot/config.txt, then add the correct line to the bottom of the config.txt. It should look something like this dtoverlay=UART3 \
-Then reboot the pi.\
-Then check the /dev/ folder for the new serial over lay. It will probably be something like '/dev/ttyAMA3' or '/dev/ttyS3'. 
-
-### Step two:
-Adding it to the system is pretty simple (I hope...). \
-Fist crate a `batch_size`. This variable will tell your listeners how many bytes to collect before submitting a save request to the data base. The larger this number the faster the data base can save the data (up to 8000), however the smaller the number the faster you will see the bytes come out the other end of the pipe. One Final note, for speed the listener will collect 10 samples of the `batch_size` then send that data to be saved by the data base. I did include a 5 second time out so if the listener stops receiving data, it will eventually save it to the data base. 
-
-Then create a name for the listener and writer. (If you need both, you can just have one or the other.) Add the names to the respective lists `serial_listener_list` and `serial_writer_list`. Then create a file path variable for the system to use. Example `uart_2 = '/dev/ttyAMA2'`. \
-Note: Adding the names of your serial objects to `serial_listener_list` and `serial_writer_list` is what will tell the server and the sensors api what serial lines they have. `serial_listener_list` gets a graph on the webpage as well. \
-After you have created the need variables, All you need to do is create the classes.  Find where `########### Set up seral interface ###########` Under this section you wil see where the serial listeners and writers are made, create the class and then add it to the thread pool. The thread pool is already started in the code I wrote, but if you are adding the code somewhere else, you will need to tell the thread pool to start.\
-Example listener:
-```python
-        ser_2_listener = serial_listener(coms = coms, batch_size=batch_size_2, thread_name=serial_listener_2_name, baudrate=9600, stopbits=1, pins=uart_2)
-        threadPool.add_thread(ser_2_listener.run, serial_listener_2_name, ser_2_listener)
-        
-        threadPool.start()
-```
-Example writer: 
-```python
-        ser_2_writer = serial_writer(coms = coms, thread_name=serial_writer_2_name, baudrate=9600, stopbits=1, pins=uart_2)
-        threadPool.add_thread(ser_2_writer.run, serial_writer_2_name, ser_2_writer)
-        
-        threadPool.start()
-
-```
 ## How to add a sensor to the system.
 ## Architecture Description:
 Authors Note: This example is write to our data scientist, who are quite smart, but in some cases do not have the same level of programming experience. Therefore I will spend quite a bit of time explaining common programming concepts. I do not do this to be condicending or demeaning, but simple to make things as easy a possible for our team.  
@@ -663,7 +484,8 @@ data = {
 sensor_parent.save_data(self, table = f'processed_data_for_{self.__name}', data = data)
 ```
 - `table` is the name of the table you want to save into, the data is the data. 
-- NOTE: data is a dictionary of the data you want to save, where the key is the column name, and the value mapped to is a list of data points to insert. I wrote it this way so that it would be easier to processes by type then save it all at once. Make sure your list are the same lengths. 
+- NOTE: data is a dictionary of the data you want to save, where the key is the column name, and the value mapped to is a list of data points to insert. I wrote it this way so that it would be easier to processes by type then save it all at once. Make sure your list are the same lengths.
+- NOTE: If your any of your columns contain byte data you need to call `sensor_parent.save_byte_data`, following the same structure. Reminder saving byte data only works for tables that only have one column. 
 
 #### - Graphing data
 Graphing is a simple x, y graph. After talking with our scientist, I assumed this would be sufficient for debugging. It should be easy to use, simply call: 
