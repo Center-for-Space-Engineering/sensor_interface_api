@@ -1,11 +1,9 @@
 '''
     This module handles the incoming data from the gps board, process it and then makes a packet and publishes the gps time packet.
 '''
-
-import time
-import math
 import threading
 import copy
+import datetime
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
@@ -34,7 +32,6 @@ class sobj_gps_board(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
-
     def process_data(self, event):
         '''
             This function gets called when one of the tap request gets any data. 
@@ -42,14 +39,22 @@ class sobj_gps_board(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         if event == 'data_received_for_serial_listener_two':
-            temp = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag']) #add the received data to the list of data we have received.
+            temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
             with self.__data_lock:
-                if len(self.__serial_line_two_data) > 0: 
+                if start_partial and len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
                     self.__serial_line_two_data += temp[1:]
                 else :
                     self.__serial_line_two_data += temp
-                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [len(self.__serial_line_two_data)]]) #start a thread to process data
+                # count = 0
+                # print('_____________________________________________________________________________________________________________________________')
+                # for packet in self.__serial_line_two_data:
+                #    print(f"{count} packet: {packet}")
+                #    count += 1
+                # print('_____________________________________________________________________________________________________________________________')
+                data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.  
+                
+                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [data_ready_for_processing]]) #start a thread to process data
     def process_gps_packets(self, num_packets):
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
@@ -59,7 +64,7 @@ class sobj_gps_board(sensor_parent):
         with self.__data_lock: #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
 
-        parsestr = '$GPRMC'
+        parsestr = 'GPRMC'
         leapSeconds = 37 - 19
         packet_terminator = '\r\n'
 
@@ -90,7 +95,9 @@ class sobj_gps_board(sensor_parent):
                     
                     with self.__packet_number_lock:
                         copy_packet_num = self.__packet_number
+
                     dataPacket = self.makePacket(gpsWeek, gps_MSOW, copy_packet_num)
+
                     processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 
                     with self.__packet_number_lock:
@@ -101,6 +108,7 @@ class sobj_gps_board(sensor_parent):
                     processed_packets += 1
             except Exception as e: # pylint: disable=w0718
                 #bad packet 
+                # print(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 dto = print_message_dto(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 self.__coms.print_message(dto, 2)
                 processed_packets += 1
@@ -132,8 +140,7 @@ class sobj_gps_board(sensor_parent):
                     crc =(crc << 1) ^ 0x1021
                 else:
                     crc = crc << 1
-        return crc & 0xFFFF
-    
+        return crc & 0xFFFF 
     def makePacket(self, week, mseconds, packetNumber):
         '''
             This makes a ccsds packet from the give args. (returns byte array)
@@ -171,7 +178,6 @@ class sobj_gps_board(sensor_parent):
         ccsdsLinex04 = headerDataLength >> 8
         ccsdsLinex05 = headerDataLength & 0xFF
         
-        #print('ccsdsLinex00--------')
         ccsdsPacket = ccsdsLinex00 << (13 * 8)
         ccsdsPacket |= ccsdsLinex01 << (12 * 8)
         ccsdsPacket |= ccsdsLinex02 << (11 * 8)
@@ -213,17 +219,20 @@ class sobj_gps_board(sensor_parent):
         '''
         secsInWeek = 604800
         secsInDay = 86400
-        gpsEpoch = (1980, 1, 6, 0, 0, 0)
+        gpsEpoch = datetime.datetime(1980, 1, 6, 0, 0, 0)
 
+        utc_time = datetime.datetime(year, month, day, hour, minute, int(sec))
+        utc_time += datetime.timedelta(seconds=leapSecs)
 
-        secFract = sec % 1
-        epochTuple = gpsEpoch + (-1, -1, 0)
-        t0 = time.mktime(epochTuple)
-        t = time.mktime((year,month,day,hour,minute,sec,-1,-1,0))
-        t = t + leapSecs
-        tdiff = t - t0
-        gpsSOW = (tdiff % secsInWeek) + secFract
-        gpsWeek = int(math.floor(tdiff/secsInWeek))
-        gpsDay = int(math.floor(gpsSOW/secsInDay))
-        gpsSOD = gpsSOW%secsInDay
-        return (gpsWeek,gpsSOW,gpsDay,gpsSOD)
+        # Calculate time difference from GPS epoch
+        tdiff = utc_time - gpsEpoch
+
+        # Extract GPS week and time of week (SOW)
+        gpsWeek = tdiff.days // 7
+        gpsSOW = (tdiff.days % 7) * secsInDay + tdiff.seconds + sec % 1
+
+        # Calculate GPS day and time of day (SOD)
+        gpsDay = gpsSOW // secsInDay
+        gpsSOD = gpsSOW % secsInDay
+
+        return (gpsWeek, gpsSOW, gpsDay, gpsSOD)
