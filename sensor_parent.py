@@ -67,6 +67,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__has_been_published  = True
         self.__has_been_published_lock = threading.Lock()
         self.__name_lock = threading.Lock()
+
         #check to make sure the name is a valid name
         pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
         if bool(re.match(pattern, name)):

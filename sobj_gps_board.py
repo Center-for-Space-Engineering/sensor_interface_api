@@ -214,6 +214,8 @@ class sobj_gps_board(sensor_parent):
         secsInWeek = 604800
         secsInDay = 86400
         gpsEpoch = (1980, 1, 6, 0, 0, 0)
+        print(f"{year} {month} {day} {hour} {minute} {sec} {leapSecs}")
+
 
 
         secFract = sec % 1
