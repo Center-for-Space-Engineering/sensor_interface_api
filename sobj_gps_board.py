@@ -46,12 +46,6 @@ class sobj_gps_board(sensor_parent):
                     self.__serial_line_two_data += temp[1:]
                 else :
                     self.__serial_line_two_data += temp
-                # count = 0
-                # print('_____________________________________________________________________________________________________________________________')
-                # for packet in self.__serial_line_two_data:
-                #    print(f"{count} packet: {packet}")
-                #    count += 1
-                # print('_____________________________________________________________________________________________________________________________')
                 data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.  
                 
                 self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [data_ready_for_processing]]) #start a thread to process data
@@ -97,6 +91,8 @@ class sobj_gps_board(sensor_parent):
                         copy_packet_num = self.__packet_number
 
                     dataPacket = self.makePacket(gpsWeek, gps_MSOW, copy_packet_num)
+
+                    print(dataPacket)
 
                     processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 

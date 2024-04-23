@@ -367,6 +367,10 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             If your data follows this structure this function will work well. However, if your data does not have a delimiter or header,
             this function will not work for your needs.  
         '''
+        if isinstance(delimiter, int):
+            delimiter = self.int_to_bytes(delimiter)
+        if isinstance(terminator, int):
+            terminator = self.int_to_bytes(terminator)
         data = bytes().join(data) # make the list into one long sequence so it is possible to process the data.
         found_packets = data.split(delimiter)
 
@@ -379,6 +383,15 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             partial_start_packet = True
             
         return found_packets, partial_start_packet, partial_end_packet
+    def int_to_bytes(seflf, integer_value):
+        '''
+            converts an integer to correct size byte object 
+        '''
+        if integer_value == 0:
+            return b'\x00'
+        
+        num_bytes = (integer_value.bit_length() + 7) // 8
+        return integer_value.to_bytes(num_bytes, byteorder='big')
     def get_data_name(self):
         '''
             This function returns the name of the data that this class publishes
