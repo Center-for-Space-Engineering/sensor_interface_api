@@ -67,7 +67,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__has_been_published  = True
         self.__has_been_published_lock = threading.Lock()
         self.__name_lock = threading.Lock()
-
         #check to make sure the name is a valid name
         pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
         if bool(re.match(pattern, name)):
@@ -356,33 +355,30 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__coms.send_request('Data Base', ['save_byte_data', table, data, self.__name])
 
 
-    def preprocess_data(self, data, delimiter:bytearray):
+    def preprocess_data(self, data, delimiter:bytearray, terminator:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.
             Example delimiter = b'$'
             data = '$hello$world'
-            return ['$hello', '$world']
+            return ['hello', 'world']
+
+            NOTE: it drops the delimiter but not the terminator.
 
             If your data follows this structure this function will work well. However, if your data does not have a delimiter or header,
             this function will not work for your needs.  
         '''
-        found_packets = []
-        current_combined = b''  # Initialize outside the loop
-        first_pass = True
-        for sample in data:
-            if delimiter in sample:
-                temp = current_combined + sample[:sample.index(delimiter)]
-                if first_pass and temp != b'': #This is to catch partial packets from the previous sample.
-                    found_packets.append(temp)
-                else : 
-                    found_packets.append(temp) # add all the data before the $ to the previous packet
-                current_combined = sample[sample.index(delimiter):]
-                if first_pass:
-                    first_pass = False
-            else:
-                current_combined += sample
-        found_packets.append(current_combined) #add a partial packet
-        return found_packets
+        data = bytes().join(data) # make the list into one long sequence so it is possible to process the data.
+        found_packets = data.split(delimiter)
+
+        #check for partial packets at the end and the beginning
+        partial_end_packet = False
+        partial_start_packet = False
+        if terminator not in found_packets[-1]:
+            partial_end_packet = True
+        if terminator not in found_packets[0] or delimiter not in found_packets[0]:
+            partial_start_packet = True
+            
+        return found_packets, partial_start_packet, partial_end_packet
     def get_data_name(self):
         '''
             This function returns the name of the data that this class publishes
