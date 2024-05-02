@@ -69,6 +69,14 @@ class sensor_html_page_generator():
         tab4.string = 'Command'
         div_element.append(tab4)
 
+        tab5 = self.__soup.new_tag('div', **{'class' : 'tab', 'onclick' : 'open_tab(\'unit_testing\')'})
+        tab5.string = 'Unit test'
+        div_element.append(tab5)
+
+        tab6 = self.__soup.new_tag('div', attrs={'class': 'tab', 'onclick': "open_tab('failed_test')"})
+        tab6.string = 'failed_test'
+        div_element.append(tab6)
+
         body.append(div_element)
         ##########################################################################
 
