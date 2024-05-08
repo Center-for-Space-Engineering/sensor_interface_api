@@ -38,7 +38,7 @@ class sobj_gps_board(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        if event == 'data_received_for_serial_listener_two':
+        if event == 'data_received_for_port_listener_one':
             temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
             with self.__data_lock:
                 if start_partial and len(self.__serial_line_two_data) > 0: 
@@ -46,7 +46,7 @@ class sobj_gps_board(sensor_parent):
                     self.__serial_line_two_data += temp[1:]
                 else :
                     self.__serial_line_two_data += temp
-                data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.  
+                data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.
                 self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [data_ready_for_processing]]) #start a thread to process data
     def process_gps_packets(self, num_packets):
         '''
@@ -106,9 +106,8 @@ class sobj_gps_board(sensor_parent):
                 # print(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 dto = print_message_dto(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 self.__coms.print_message(dto, 2)
-                processed_packets += 1
         with self.__data_lock: #update the list with unprocessed packets. 
-            self.__serial_line_two_data = self.__serial_line_two_data[processed_packets:]
+            self.__serial_line_two_data = self.__serial_line_two_data[num_packets:]
         
         #save the data to the database
         data = {
