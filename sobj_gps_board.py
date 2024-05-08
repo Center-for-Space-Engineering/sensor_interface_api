@@ -91,8 +91,6 @@ class sobj_gps_board(sensor_parent):
 
                     dataPacket = self.makePacket(gpsWeek, gps_MSOW, copy_packet_num)
 
-                    print(dataPacket)
-
                     processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 
                     with self.__packet_number_lock:
