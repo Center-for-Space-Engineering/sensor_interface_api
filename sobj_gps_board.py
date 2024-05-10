@@ -26,7 +26,8 @@ class sobj_gps_board(sensor_parent):
         # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your row information on each sub index.
         # the row structure is [<table name>, bit count (zero if you dont care), type (int, float, string, bool, bigint, byte)]
         self.__table_structure = {
-            f'processed_data_for_{self.__name}' : [['gps_packets', 13, 'byte']],
+            f'processed_data_for_{self.__name}_ccsds_packet' : [['gps_packets', 14, 'byte']],
+            f'processed_data_for_{self.__name}' : [['day', 0, 'int'], ['hour', 0, 'int'], ['minute', 0, 'int'], ['second', 0, 'int']],
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
@@ -63,6 +64,10 @@ class sobj_gps_board(sensor_parent):
 
         processed_packets = 0
         processed_packets_list = []
+        day_list = []
+        hour_list = []
+        minute_list = []
+        second_list = []
 
         for packet in temp_data_structure:
             try :
@@ -79,6 +84,11 @@ class sobj_gps_board(sensor_parent):
                     day = int(d[0])
                     month = int(d[1])
                     year = int(d[2])
+
+                    day_list.append(day)
+                    hour_list.append(hour)
+                    minute_list.append(minute)
+                    second_list.append(second)
                 
                     
                     results = self.gpsFromUTC(year,month,day,hour,minute,second, leapSeconds)
@@ -111,8 +121,16 @@ class sobj_gps_board(sensor_parent):
         data = {
             'gps_packets' : processed_packets_list,
         }
-        sensor_parent.save_byte_data(self, table=f'processed_data_for_{self.__name}', data=data)
+        sensor_parent.save_byte_data(self, table=f'processed_data_for_{self.__name}_ccsds_packet', data=data)
 
+        data = {
+            'day' : day_list,
+            'hour' : hour_list,
+            'minute' : minute_list,
+            'second' : second_list,
+        }
+
+        sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}', data=data)
         #now we need to publish the data NOTE: remember we are a passive sensor. 
         sensor_parent.set_publish_data(self, data=data)
         sensor_parent.publish(self)

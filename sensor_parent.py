@@ -352,7 +352,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 data : list of the data to store. NOTE: if you are saving into table with multiple values per row, then it should be a list of list, where each sub list is each value per row in order.
                     Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
-        self.__coms.send_request('Data Base', ['save_byte_data', table, data, self.__name])
+        self.__coms.send_request(self.__db_name, ['save_byte_data', table, data, self.__name])
     def preprocess_data(self, data, delimiter:bytearray, terminator:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.
