@@ -136,21 +136,27 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             Returns an file path to an html file.
         '''
-        with self.__html__lock:
+        if self.__html__lock.acquire(timeout=1):
             temp_token = self.generate_html_file(self.__html_file_path)
+            self.__html__lock.release()
+        else : 
+            raise RuntimeError("Could not acquire html lock")
         return temp_token
     def get__sensor_status(self):
         '''
             Returns the status of the sensor, it is up to the user to set this status, this function returns that status to the server. 
         '''
-        with self.__status_lock:
+        if self.__status_lock.acquire(timeout=1):
             temp = self.__status
+            self.__status_lock.release()
+        else : 
+            raise RuntimeError("Could not aquire status lock")
         return temp
     def set_sensor_status(self, status):
         '''
             User calls this function to set a status, must be Running, Error, Not running.
         '''
-        with self.__status_lock:
+        if self.__status_lock.acquire(timeout=1):
             if status == 'Running':
                 self.__status = status
             elif status == 'Error':
@@ -159,6 +165,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 self.__status = status
             else :
                 raise RuntimeError(f"{status} is not a valid status.")
+            self.__status_lock.release()
+        else :
+            raise RuntimeError("Could not aquire status lock")
     def set_thread_status(self, status):
         '''
             This function is for setting the threading status AKA your processing threads that get started. USE 'Running', 'Complete' or 'Error'.
@@ -177,29 +186,41 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS:
                 tap_name : the name of the tap you want to get data out of. 
         '''
-        with self.__data_lock:
+        if self.__data_lock.acquire(timeout=1):
             data_copy = copy.deepcopy(self.__data_received[tap_name])
+            self.__data_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire data lock")
         return data_copy
     def make_data_tap(self, name_of_class_to_make_tap):
         '''
             This requests sends a request to the class you want and then that class creates a tap for you to listen too.
         '''
-        with self.__name_lock:
+        if self.__name_lock.acquire(timeout=1):
             temp_name_token = self.__name
+            self.__name_lock.release()
+        else :
+            raise RuntimeError("Could not aquire name lock")
         self.__coms.send_request(name_of_class_to_make_tap, ['create_tap', self.send_tap, temp_name_token])
     def send_tap(self, data, sender):
         '''
             This is the function that is called by the class you asked to make a tap.
         '''
-        with self.__data_lock:
+        if self.__data_lock.acquire(timeout=1):
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
+            self.__data_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data lock")
         threadWrapper.set_event(self, f'data_received_for_{sender}')
     def get_taps(self):
         '''
             This function returns the list of requested taps 
         '''
-        with self.__taps_lock:
+        if self.__taps_lock.acquire(timeout=1):
             temp = self.__taps
+            self.__taps_lock.release()
+        else :
+            raise RuntimeError("Could not aquire taps lock")
         return temp
     def create_tab(self, args):
         '''
@@ -207,66 +228,105 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS:
                 args[0] : tab function to call.  
         '''
-        with self.__tap_requests_lock:
+        if self.__tap_requests_lock.acquire(timeout=1):
             self.__tap_requests.append(args[0])
-        with self.__config_lock:
+            self.__tap_requests_lock.release()
+        else :
+            raise RuntimeError("Could not acquire tap requests lock")
+        if self.__config_lock.acquire(timeout=1):
             self.__config['subscribers'] = self.__tap_requests
+            self.__config_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire config lock")
     def get_sensor_name(self):
         '''
             This function returns the name of the sensor.
         '''
-        with self.__name_lock:
+        if self.__name_lock.acquire(timeout=1):
             temp = self.__name
+            self.__name_lock.release()
+        else :
+            raise RuntimeError("Could not aquire name lock")
         return temp
     def start_publisher(self):
         '''
             If it is an active publisher then we will start it on its own thread.
         '''
-        with self.__name_lock:
+        if self.__name_lock.acquire(timeout=1):
             temp_name_token = self.__name
+            self.__name_lock.release()
+        else : 
+            raise RuntimeError("Could not aquire name lock")
         self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
     def publish(self):
         '''
             Publishes the data to all the other threads that have requested taps.
         '''
-        with self.__active__lock:
+        if self.__active__lock.acquire(timeout=1):
             active = self.__active
             if active:
                 interval_pub = self.__interval_pub
+            self.__active__lock.release()
+        else : 
+            raise RuntimeError("Could not acquire active lock")
         if active:
             while True:
-                with self.__publish_data_lock:
+                if self.__publish_data_lock.acquire(timeout=1):
                     data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-                with self.__tap_requests_lock:
+                    self.__publish_data_lock.release()
+                else : 
+                    raise RuntimeError("Could not acquire publish data lock")
+                if self.__tap_requests_lock.acquire(timeout=1):
                     tap_request_copy = copy.deepcopy(self.__tap_requests)
+                    self.__tap_requests_lock.release()
+                else : 
+                    raise RuntimeError("Could not axqure tap request lock")
                 for subscriber in tap_request_copy:
                     temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
                     subscriber.send_tap(temp)
-                with self.__last_published_data_lock:
+                if self.__last_published_data_lock.acquire(timeout=1):
                     self.__last_published_data['time'] = str(datetime.now())
                     try :
                         self.__last_published_data['data'] = ' , '.join(data_copy[-1])
                     except : # pylint: disable=w0702
                         self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
-                with self.__has_been_published_lock:
+                    self.__last_published_data_lock.release()
+                else :
+                    raise RuntimeError("Could not acquire published data lock")
+                if self.__has_been_published_lock.acquire(timeout=1):
                     self.__has_been_published = True
+                    self.__has_been_published_lock.release()
+                else : 
+                    raise RuntimeError("Could not acquire has been published lock")
                 time.sleep(interval_pub)
         else :
-            with self.__publish_data_lock:
+            if self.__publish_data_lock.acquire(timeout=1):
                 data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-            with self.__tap_requests_lock:
+                self.__publish_data_lock.release()
+            else :
+                raise RuntimeError("Could not acquire publish data lock")
+            if self.__tap_requests_lock.acquire(timeout=1):
                 tap_request_copy = copy.deepcopy(self.__tap_requests)
+                self.__tap_requests_lock.release()
+            else : 
+                raise RuntimeError('Couald not acquire tap requests lock')
             for subscriber in tap_request_copy:
                 temp  = data_copy #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
                 subscriber.send_tap(temp)
-            with self.__last_published_data_lock:
+            if self.__last_published_data_lock.acquire(timeout=1):
                 self.__last_published_data['time'] = str(datetime.now())
                 try:
                     self.__last_published_data['data'] = ' , '.join(map(str,data_copy[-1]))
                 except : # pylint: disable=w0702
                     self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
-        with self.__has_been_published_lock:
+                self.__last_published_data_lock.release()
+            else : 
+                raise RuntimeError("Could not acquire last published data lock")
+        if self.__has_been_published_lock.acquire(timeout=1):
             self.__has_been_published = True
+            self.__has_been_published_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire has been published lock")
     def set_publish_data(self, data):
         '''
             This function takes a list of list to publish.
@@ -276,16 +336,25 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS : 
                 data : list of list to publish to the system. Example [[1, 2, 3], [4, 5, 6]]
         '''
-        with self.__publish_data_lock:
+        if self.__publish_data_lock.acquire(timeout=1):
             self.__publish_data = data
-        with self.__has_been_published_lock:
+            self.__publish_data_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire publish data lock")
+        if self.__has_been_published_lock.acquire(timeout=1):
             self.__has_been_published = False
+            self.__has_been_published_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire has been published lock")
     def has_been_published(self):
         '''
             This returns a boolean about where or not the last message has been published. 
         '''
-        with self.__has_been_published_lock:
+        if self.__has_been_published_lock.acquire(timeout=1):
             copy_token = self.__has_been_published
+            self.__has_been_published_lock.release()
+        else :
+            raise RuntimeError("Could not acquire has been published lock")
         return copy_token
     def add_graph_data(self, graph, x, y):
         '''
@@ -296,7 +365,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 x : list of x data points
                 y : list of y data points
         '''
-        with self.__data_report_lock:
+        if self.__data_report_lock.acquire(timeout=1):
             self.__data_report[graph]['x'] = self.__data_report[graph]['x'] + x
             self.__data_report[graph]['y'] = self.__data_report[graph]['y'] + y
 
@@ -312,26 +381,38 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 y_data_over = len(self.__data_report[graph]['y']) - self.__max_data_points
             for _ in range(y_data_over):
                 self.__data_report[graph]['y'].pop(0)
+            self.__data_report_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire data report lock")
     def get_data_report(self):
         '''
             Returns a copy of the data report to the requester. 
         '''
-        with self.__data_report_lock:
+        if self.__data_report_lock.acquire(timeout=1):
             copy_data_report = copy.deepcopy(self.__data_report)
+            self.__data_report_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data report lock")
         return copy_data_report
     def get_graph_names(self):
         '''
             Returns a copy of the graph names to the requester. 
         '''
-        with self.__graphs_lock:
+        if self.__graphs_lock.acquire(timeout=1):
             copy_graph_names = copy.deepcopy(self.__graphs)
+            self.__graphs_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire graphs lock")
         return copy_graph_names
     def get_last_published_data(self):
         '''
             Returns a copy of the last data published to the requester. 
         '''
-        with self.__last_published_data_lock:
+        if self.__last_published_data_lock.acquire(timeout=1):
             copy_last_data_published = copy.deepcopy(self.__last_published_data)
+            self.__last_published_data_lock.release()
+        else : 
+            raise RuntimeError("Could not acquire last published data lock")
         return copy_last_data_published
     def save_data(self, table, data):
         '''
