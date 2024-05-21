@@ -12,6 +12,7 @@ from datetime import datetime
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
 from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator # pylint: disable=e0401
+import system_constants as sys_c
 
 class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
@@ -108,7 +109,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         ##########################################################################
         ##################### set up the threadWrapper stuff #####################
         self.__function_dict = { 
-            'create_tab' : self.create_tab,
+            'create_tap' : self.create_tap,
         }
         threadWrapper.__init__(self, self.__function_dict, self.__events)
         ##########################################################################
@@ -132,6 +133,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         # debug it if we do
         self.__html__lock = threading.Lock()
         ##########################################################################
+        ################## initialize byte array for incomplete packets ##########
+        self.__extra_packet_data = bytearray()
     def get_html_page(self):
         '''
             Returns an file path to an html file.
@@ -222,9 +225,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else :
             raise RuntimeError("Could not aquire taps lock")
         return temp
-    def create_tab(self, args):
+    def create_tap(self, args):
         '''
-            This function creates a tab, a tab will send the data it receives from the requested class to the class that created the tab.
+            This function creates a tap, a tap will send the data it receives from the requested class to the class that created the tap.
             ARGS:
                 args[0] : tab function to call.  
         '''
@@ -462,6 +465,46 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             partial_start_packet = True
             
         return found_packets, partial_start_packet, partial_end_packet
+    def preprocess_ccsds_data(self, data):
+        '''
+            This function will go through the data and extract ccsds telemetry packets with valid APIDs, also detects packets with bad headers
+        '''
+        data = bytes().join(data) # make the list into one long sequence so it is possible to process the data.
+        data = self.__extra_packet_data + data # Append extra data from the previous batch
+
+        found_packets = []
+        bad_packet_detected = False
+
+        packet_found = False
+        partial_end_packet = False
+
+        iter = 0
+        while iter < len(data):
+            if iter + sys_c.sync_word_len + sys_c.ccsds_header_len < len(data):                                                             # Check if there is enough bytes for a packet header    
+                if int.from_bytes(data[iter:iter + sys_c.sync_word_len], 'big') == sys_c.sync_word:
+                    packet_length = ((data[iter + sys_c.packet_len_addr1] << 8) | data[iter + sys_c.packet_len_addr2]) + 1                  # Get packet length, the packet length value is the total bytes including crc minus one, ccsds standards ¯\_(ツ)_/¯
+                    if iter + sys_c.sync_word_len + sys_c.ccsds_header_len + packet_length <= len(data):                                    # The whole packet is contained in this data section, append to found packets
+                        packet = data[iter + sys_c.sync_word_len:iter + sys_c.sync_word_len + sys_c.ccsds_header_len + packet_length + 1]
+                        found_packets.append(packet)
+                        packet_found = True
+                        iter = iter + sys_c.sync_word_len + sys_c.ccsds_header_len + packet_length
+                    else:                                                                           # the entire packet is not in the current section
+                        self.__extra_packet_data = data[iter:]
+                        partial_end_packet = True
+                        break
+                else:                    
+                    if packet_found == True:                                                        # Bad packet found
+                        bad_packet_detected = True
+            else:                                                                                   # Not enough data for a header
+                self.__extra_packet_data = data[iter:]
+                partial_end_packet = True
+                break
+            iter = iter + 1
+        if partial_end_packet == False:
+            self.__extra_packet_data = bytearray()
+
+            
+        return found_packets, bad_packet_detected
     def int_to_bytes(seflf, integer_value):
         '''
             converts an integer to correct size byte object 
