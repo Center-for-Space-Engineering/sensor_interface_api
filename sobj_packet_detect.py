@@ -49,7 +49,7 @@ class sobj_packet_detect(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         # print(event)
-        if event == 'data_received_for_serial_listener_two':
+        if event == 'data_received_for_swp2_port_listener':
             # print("event entered")
             temp, bad_packet_detected = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0])) #add the received data to the list of data we have received.
             with self.__data_lock:
@@ -93,26 +93,26 @@ class sobj_packet_detect(sensor_parent):
         
         # Create data to save to the database
         save_data = {
-            'time' : current_time,
-            'STT' : self.__packet_count[0],
-            'FPP1' : self.__packet_count[1],
-            'FPP2' : self.__packet_count[2],
-            'FPP3' : self.__packet_count[3],
-            'FPP4' : self.__packet_count[4],
-            'FBP' : self.__packet_count[5],
-            'SLP' : self.__packet_count[6],
-            'FLP' : self.__packet_count[7],
-            'TAM' : self.__packet_count[8],
-            'SIP' : self.__packet_count[9],
-            'TIP' : self.__packet_count[10],
-            'QIP' : self.__packet_count[11],
-            'PDS' : self.__packet_count[12],
-            'EFS1' : self.__packet_count[13],
-            'EFS2' : self.__packet_count[14],
-            'EFS3' : self.__packet_count[15],
-            'ECO' : self.__packet_count[16],
-            'Ukwn' : self.__unknown_apid_count,
-            'bad_crc' : self.__bad_crc_count
+            'time' : [str(current_time)],
+            'STT' : [self.__packet_count[0]],
+            'FPP1' : [self.__packet_count[1]],
+            'FPP2' : [self.__packet_count[2]],
+            'FPP3' : [self.__packet_count[3]],
+            'FPP4' : [self.__packet_count[4]],
+            'FBP' : [self.__packet_count[5]],
+            'SLP' : [self.__packet_count[6]],
+            'FLP' : [self.__packet_count[7]],
+            'TAM' : [self.__packet_count[8]],
+            'SIP' : [self.__packet_count[9]],
+            'TIP' : [self.__packet_count[10]],
+            'QIP' : [self.__packet_count[11]],
+            'PDS' : [self.__packet_count[12]],
+            'EFS1' : [self.__packet_count[13]],
+            'EFS2' : [self.__packet_count[14]],
+            'EFS3' : [self.__packet_count[15]],
+            'ECO' : [self.__packet_count[16]],
+            'Ukwn' : [self.__unknown_apid_count],
+            'bad_crc' : [self.__bad_crc_count]
         }
         #save counts
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_counts', data=save_data)
@@ -121,26 +121,26 @@ class sobj_packet_detect(sensor_parent):
 
         # Create data to save to the database
         save_data = {
-            'time' : current_time,
-            'STT' : self.__packet_count[0]/elapsed_seconds,
-            'FPP1' : self.__packet_count[1]/elapsed_seconds,
-            'FPP2' : self.__packet_count[2]/elapsed_seconds,
-            'FPP3' : self.__packet_count[3]/elapsed_seconds,
-            'FPP4' : self.__packet_count[4]/elapsed_seconds,
-            'FBP' : self.__packet_count[5]/elapsed_seconds,
-            'SLP' : self.__packet_count[6]/elapsed_seconds,
-            'FLP' : self.__packet_count[7]/elapsed_seconds,
-            'TAM' : self.__packet_count[8]/elapsed_seconds,
-            'SIP' : self.__packet_count[9]/elapsed_seconds,
-            'TIP' : self.__packet_count[10]/elapsed_seconds,
-            'QIP' : self.__packet_count[11]/elapsed_seconds,
-            'PDS' : self.__packet_count[12]/elapsed_seconds,
-            'EFS1' : self.__packet_count[13]/elapsed_seconds,
-            'EFS2' : self.__packet_count[14]/elapsed_seconds,
-            'EFS3' : self.__packet_count[15]/elapsed_seconds,
-            'ECO' : self.__packet_count[16]/elapsed_seconds,
-            'Ukwn' : self.__unknown_apid_count/elapsed_seconds,
-            'bad_crc' : self.__bad_crc_count/elapsed_seconds
+            'time' : [str(current_time)],
+            'STT' : [self.__packet_count[0]/elapsed_seconds],
+            'FPP1' : [self.__packet_count[1]/elapsed_seconds],
+            'FPP2' : [self.__packet_count[2]/elapsed_seconds],
+            'FPP3' : [self.__packet_count[3]/elapsed_seconds],
+            'FPP4' : [self.__packet_count[4]/elapsed_seconds],
+            'FBP' : [self.__packet_count[5]/elapsed_seconds],
+            'SLP' : [self.__packet_count[6]/elapsed_seconds],
+            'FLP' : [self.__packet_count[7]/elapsed_seconds],
+            'TAM' : [self.__packet_count[8]/elapsed_seconds],
+            'SIP' : [self.__packet_count[9]/elapsed_seconds],
+            'TIP' : [self.__packet_count[10]/elapsed_seconds],
+            'QIP' : [self.__packet_count[11]/elapsed_seconds],
+            'PDS' : [self.__packet_count[12]/elapsed_seconds],
+            'EFS1' : [self.__packet_count[13]/elapsed_seconds],
+            'EFS2' : [self.__packet_count[14]/elapsed_seconds],
+            'EFS3' : [self.__packet_count[15]/elapsed_seconds],
+            'ECO' : [self.__packet_count[16]/elapsed_seconds],
+            'Ukwn' : [self.__unknown_apid_count/elapsed_seconds],
+            'bad_crc' : [self.__bad_crc_count/elapsed_seconds]
         }
         #save rate data
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_rates', data=save_data)
