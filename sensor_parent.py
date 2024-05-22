@@ -482,7 +482,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         while iter < len(data):
             if iter + sys_c.sync_word_len + sys_c.ccsds_header_len < len(data):                                                             # Check if there is enough bytes for a packet header    
                 if int.from_bytes(data[iter:iter + sys_c.sync_word_len], 'big') == sys_c.sync_word:
-                    print("sync word: ", sys_c.sync_word)
                     packet_length = ((data[iter + sys_c.packet_len_addr1] << 8) | data[iter + sys_c.packet_len_addr2]) + 1                  # Get packet length, the packet length value is the total bytes including crc minus one, ccsds standards ¯\_(ツ)_/¯
                     # print("Packet Length: ", packet_length)
                     if iter + sys_c.sync_word_len + sys_c.ccsds_header_len + packet_length <= len(data):                                    # The whole packet is contained in this data section, append to found packets
