@@ -39,9 +39,9 @@ class sobj_gps_board(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        if event == 'data_received_for_port_listener_one':
+        if event == 'data_received_for_gps_port_listener':
             temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
-            with self.__data_lock:
+            if self.__data_lock.acquire(timeout=1):
                 if start_partial and len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
                     self.__serial_line_two_data += temp[1:]
@@ -49,14 +49,20 @@ class sobj_gps_board(sensor_parent):
                     self.__serial_line_two_data += temp
                 data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.
                 self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} ', self, [data_ready_for_processing]]) #start a thread to process data
+                self.__data_lock.release()
+            else :
+                raise RuntimeError("Could not acquire data lock")
     def process_gps_packets(self, num_packets):
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
         '''
         
         sensor_parent.set_thread_status(self, 'Running')
-        with self.__data_lock: #get the data out of the data storage. 
+        if self.__data_lock.acquire(timeout=1): #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
+            self.__data_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data lock")
 
         parsestr = 'GPRMC'
         leapSeconds = 37 - 19
@@ -96,15 +102,21 @@ class sobj_gps_board(sensor_parent):
                     gpsWeek = results[0]
                     gps_MSOW = int(results[1] * 1000)
                     
-                    with self.__packet_number_lock:
+                    if self.__packet_number_lock.acquire(timeout=1):
                         copy_packet_num = self.__packet_number
+                        self.__packet_number_lock.release()
+                    else : 
+                        raise RuntimeError('Could not acquire packet number lock')
 
                     dataPacket = self.makePacket(gpsWeek, gps_MSOW, copy_packet_num)
 
                     processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 
-                    with self.__packet_number_lock:
+                    if self.__packet_number_lock.acquire(timeout=1):
                         self.__packet_number+=1
+                        self.__packet_number_lock.release()
+                    else :
+                        raise RuntimeError('Could not acquire packet number lock')
                     processed_packets += 1
 
                 if packet_terminator in packet:
@@ -114,8 +126,11 @@ class sobj_gps_board(sensor_parent):
                 # print(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 dto = print_message_dto(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 self.__coms.print_message(dto, 2)
-        with self.__data_lock: #update the list with unprocessed packets. 
+        if self.__data_lock.acquire(timeout=1): #update the list with unprocessed packets. 
             self.__serial_line_two_data = self.__serial_line_two_data[num_packets:]
+            self.__data_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data lock")
         
         #save the data to the database
         data = {
