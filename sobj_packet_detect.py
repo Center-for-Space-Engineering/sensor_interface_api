@@ -84,7 +84,10 @@ class sobj_packet_detect(sensor_parent):
                     data[self.__telemetry_packet_types[APID - 0x0010]].append(packet)   # add packet to list in data dictionary for publishing
                 else:                                                                   # invalid crc
                     self.__bad_crc_count += 1
-                    print("packet w/ bad crc: ", packet)
+                    # print("packet w/ bad crc: ", packet)
+                    # print("packet w/ bad crc: ", packet)
+                    # print("packet length:", int.from_bytes(packet[4:6], 'big'))
+                    # print("packet crc:", packet[-2:])
             else:                                                                       # Unknown packet
                 self.__unknown_apid_count += 1
 
@@ -117,7 +120,7 @@ class sobj_packet_detect(sensor_parent):
         #save counts
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_counts', data=save_data)
 
-        # print("count dict: ", save_data)
+        print("count dict: ", save_data)
 
         # Create data to save to the database
         save_data = {
@@ -145,7 +148,7 @@ class sobj_packet_detect(sensor_parent):
         #save rate data
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_rates', data=save_data)
 
-        # print("rate dict: ", save_data)
+        print("rate dict: ", save_data)
 
 
         #now we need to publish the data NOTE: remember we are a passive sensor. 
