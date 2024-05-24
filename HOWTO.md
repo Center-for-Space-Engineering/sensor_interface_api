@@ -342,13 +342,13 @@ Here is an example:
 # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your column information on each sub index.
 # the column structure is [<table name>, bit count (zero if you dont care), type (int, float, string, bool, bigint, byte)]
 self.__table_structure = {
-    f'processed_data_for_{self.__name}' : [['gps_packets', 0, 'string'], ['test_data', 10, 'int']],
-    f'processed_data_for_{self.__name}_table_2' : [['gps_packets', 0, 'string'], ['test_data', 10, 'int']],
+    f'processed_data_for_{self.__name}' : [['gps_packets', 0, 'string'], ['test_data', 0, 'int']],
+    f'processed_data_for_{self.__name}_table_2' : [['gps_packets', 0, 'string'], ['test_data', 0, 'int']],
 
 }
 ```
 - The structure is a dictionary, then the key is the name of the table you want to make. The value the key maps to is a list of list. Each sub list is a description of how a column in that table should be structured. The fist index in the sub list is the name of the data in that column. The next index only matters if you are storing byte data and it is the number of bytes to store, the final index is the type of the data.\
-NOTE: The Database has about 32 bytes of over head per row (index for that row) plus what ever `sqlite3` wants. Bottom line, try not to create rows with very little data in them, like a row of single bytes because you will have a massive memory explosion. 
+NOTE: The Database has about 32 bytes of over head per row (index for that row) plus what ever `mySQL` wants. Bottom line, try not to create rows with very little data in them, like a row of single bytes because you will have a massive memory explosion. 
 - NOTE: the table will be created and archived when the system boots, because of this archive your table structure and data should persist across run cycles.  
 - NOTE: I will explain saving into the database when I talk about processing the data. 
 

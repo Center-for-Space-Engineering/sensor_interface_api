@@ -41,6 +41,7 @@ class sobj_gps_board(sensor_parent):
         '''
         if event == 'data_received_for_gps_port_listener':
             temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
+            # pylint: disable=R1732
             if self.__data_lock.acquire(timeout=1):
                 if start_partial and len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
@@ -52,13 +53,14 @@ class sobj_gps_board(sensor_parent):
                 self.__data_lock.release()
             else :
                 raise RuntimeError("Could not acquire data lock")
-    def process_gps_packets(self, num_packets):
+    def process_gps_packets(self, num_packets): # pylint: disable=R0915
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
         '''
-        
         sensor_parent.set_thread_status(self, 'Running')
-        if self.__data_lock.acquire(timeout=1): #get the data out of the data storage. 
+        # pylint: disable=R1732
+        if self.__data_lock.acquire(timeout=1):
+            #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
             self.__data_lock.release()
         else :
@@ -242,7 +244,7 @@ class sobj_gps_board(sensor_parent):
         '''
             Get the gps data from UTC time.
         '''
-        secsInWeek = 604800
+        _ = 604800 #seconds in week
         secsInDay = 86400
         gpsEpoch = datetime.datetime(1980, 1, 6, 0, 0, 0)
 
