@@ -153,8 +153,8 @@ class sobj_gps_board(sensor_parent):
         headerType = 1
         #1 says there is a secondary header
         headerFlag = 0
-        #APID is whatever the heck you want
-        headerAPID = 276
+        #APID is whatever the heck you want (currently 0x021 = 33)
+        headerAPID = 33
         #this is the "11" (decimal 3) meaning the data is not broken into multiple packets
         headerSequence = 3
         #ome command packet has a byte of data and two of checksum, offset = 8-1 = 7
