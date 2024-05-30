@@ -30,7 +30,7 @@ class sobj_gps_board(sensor_parent):
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
-        sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
+        sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=100, db_name = '', table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
     def process_data(self, event):
         '''
@@ -39,7 +39,7 @@ class sobj_gps_board(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         if event == 'data_received_for_serial_listener_two':
-            temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
+            temp, start_partial, end_partial = sensor_parent.preprocess_data(self, [sensor_parent.get_data_received(self, self.__config['tap_request'][0])], delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
             with self.__data_lock:
                 if start_partial and len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
@@ -112,7 +112,9 @@ class sobj_gps_board(sensor_parent):
         data = {
             'gps_packets' : processed_packets_list,
         }
-        sensor_parent.save_byte_data(self, table=f'processed_data_for_{self.__name}', data=data)
+        
+        if len(processed_packets_list) > 0:
+            self.__coms.send_request(self.__config['serial_writer'], ['write_to_serial_port_bytes', processed_packets_list[-1]]) #we are going to grab the last processed gps packet to send
 
         #now we need to publish the data NOTE: remember we are a passive sensor. 
         sensor_parent.set_publish_data(self, data=data)
