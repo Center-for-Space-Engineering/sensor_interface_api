@@ -19,6 +19,7 @@ class sobj_packet_processor(sensor_parent):
         self.__apid = apid #this is the  sensor name 
         sensor_config.sensors_config['packet_parser'].update(self.__packet_config) # every processor uses the same genral config
         self.__config = sensor_config.sensors_config['packet_parser']
+        self.__name = self.__packet_nmemonic + self.__config['extention']
 
         
 
@@ -53,7 +54,7 @@ class sobj_packet_processor(sensor_parent):
         self.__buffer["time_RTC"] = [bytearray(sensor_config.real_time_clock) for _ in range(self.__packet_config['Granule count'])]
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
-        sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__packet_nmemonic, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
+        sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
     def process_data(self, _):
         '''
