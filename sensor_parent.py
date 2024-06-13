@@ -252,6 +252,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function creates a tap, a tap will send the data it receives from the requested class to the class that created the tap.
             ARGS:
                 args[0] : tab function to call.  
+                args[1] : name of subscriber.  
         '''
         if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
             self.__tap_requests.append(args[0])
@@ -259,7 +260,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else :
             raise RuntimeError("Could not acquire tap requests lock")
         if self.__config_lock.acquire(timeout=1): # pylint: disable=R1732
-            self.__config['subscribers'] = self.__tap_requests
+            self.__config['subscribers'] = args[1]
             self.__config_lock.release()
         else : 
             raise RuntimeError("Could not acquire config lock")
