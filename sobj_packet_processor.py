@@ -19,6 +19,7 @@ class sobj_packet_processor(sensor_parent):
         self.__apid = apid #this is the  sensor name 
         sensor_config.sensors_config['packet_parser'].update(self.__packet_config) # every processor uses the same genral config
         self.__config = sensor_config.sensors_config['packet_parser']
+        self.__config['apid'] = self.__apid
         self.__name = self.__packet_nmemonic + self.__config['extention']
 
         
