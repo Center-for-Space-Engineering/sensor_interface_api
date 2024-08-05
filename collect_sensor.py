@@ -34,6 +34,7 @@ class sensor_importer():
             telemetry_packet_types.append((self.__packets_struter[packet]['Mnemonic'], packet, count)) # Mnemonic, APID, possition in a list
             count += 1
         system_constants.telemetry_packet_types = telemetry_packet_types
+        system_constants.telemetry_packet_num = count
 
     def import_modules(self):
         '''

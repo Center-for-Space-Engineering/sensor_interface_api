@@ -20,7 +20,7 @@ class sobj_packet_detect(sensor_parent):
         self.__data_lock = threading.Lock()
         self.__coms = coms
 
-        self.__telemetry_packet_type_num = 17
+        self.__telemetry_packet_type_num = sensor_config.telemetry_packet_num
         self.__packet_count = [0] * self.__telemetry_packet_type_num
         self.__bad_crc_count = 0
         self.__unknown_apid_count = 0
