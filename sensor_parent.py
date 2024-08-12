@@ -223,6 +223,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             This is the function that is called by the class you asked to make a tap.
         '''
+        if len(data) <= 0:
+            return
         if self.__data_buffer_overwrite_lock.acquire(timeout=1): # pylint: disable=R1732
             if self.__data_buffer_overwrite: # pylint: disable=R1720
                 raise RuntimeWarning(f"WARNING : Data in buffer for sensor {self.get_sensor_name()} has been overwritten. Consider processing your data faster or increasing you buffer size.")
@@ -233,10 +235,12 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
+            threadWrapper.set_event(self, f'data_received_for_{sender}')
             self.__data_lock.release()
         else :
             raise RuntimeError("Could not acquire data lock")
-        threadWrapper.set_event(self, f'data_received_for_{sender}')
+        
+        
     def get_taps(self):
         '''
             This function returns the list of requested taps 

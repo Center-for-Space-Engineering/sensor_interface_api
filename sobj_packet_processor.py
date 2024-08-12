@@ -64,7 +64,7 @@ class sobj_packet_processor(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
-        buffer_list_to_publish = []
+
         for packet in data:
             if len(packet) > 0:
                 # print(f"APID: {self.__apid}\n\tPacket {packet}")
@@ -82,16 +82,23 @@ class sobj_packet_processor(sensor_parent):
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
                         self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
                         cur_position_bits += self.__unpacking_map[i]
+                
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
                 sensor_parent.save_data(self, table=f"{self.__packet_config['Mnemonic']}", data=buf_copy)
-                buffer_list_to_publish.append(buf_copy)
+
+                if self.__name == 'TAMboard_1':
+                    print("Publishing data")
+
+                sensor_parent.set_publish_data(self, data=buf_copy)
+                sensor_parent.publish(self)
+
+
                 # flush the buffer
                 for key in self.__buffer: # pylint: disable=C0206
                     for byte_storage in range(len(self.__buffer[key])):
                         self.__buffer[key][byte_storage] = 0xFFFFFFFF
-        sensor_parent.set_publish_data(self, data=buffer_list_to_publish)
-        sensor_parent.publish(self)
+        
     def bitarray_to_int(self, bit_array):
         '''
             converts bitarray into and int
