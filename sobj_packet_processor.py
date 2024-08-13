@@ -3,26 +3,29 @@
 '''
 import copy
 from bitarray import bitarray
+from datetime import datetime
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
+from logging_system_display_python_api.logger import loggerCustom as logger
 
 class sobj_packet_processor(sensor_parent):
     '''
         This model is generic packet processor, one of these classes is created for each packet that is defined in the yaml. It will create 
         database tables for the granles in the packets then saves them into the database. 
     '''
-    def __init__(self, coms, packet_config_dict:dict, apid:str) -> None:
+    def __init__(self, coms, name, packet_config_dict:dict, apid:str) -> None:
+        self.__name = name
         self.__coms = coms
         self.__packet_config = packet_config_dict
         self.__packet_nmemonic = self.__packet_config['Mnemonic']
         self.__apid = apid #this is the  sensor name 
-        sensor_config.sensors_config['packet_parser'].update(self.__packet_config) # every processor uses the same genral config
-        self.__config = sensor_config.sensors_config['packet_parser']
+        sensor_config.sensors_config[self.__name].update(self.__packet_config) # every processor uses the same genral config
+        self.__config = sensor_config.sensors_config[self.__name]
         self.__config['apid'] = self.__apid
         self.__name = self.__packet_nmemonic + self.__config['extention']
-
-        
+        self.__count = 0
+        self.__logger = logger(f'logs/{self.__packet_nmemonic}.txt')
 
         self.__table_structure = {}
 
@@ -66,7 +69,7 @@ class sobj_packet_processor(sensor_parent):
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
 
         for packet in data:
-            if len(packet) > 0:
+            if len(packet) > 0:                
                 # print(f"APID: {self.__apid}\n\tPacket {packet}")
                 sys_clk_ms = (packet[sensor_config.ccsds_header_len+1] << 24) | (packet[sensor_config.ccsds_header_len+2] << 16) | (packet[sensor_config.ccsds_header_len+3] << 8) | (packet[sensor_config.ccsds_header_len+4])
                 real_time_clk = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+3])
@@ -86,9 +89,6 @@ class sobj_packet_processor(sensor_parent):
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
                 sensor_parent.save_data(self, table=f"{self.__packet_config['Mnemonic']}", data=buf_copy)
-
-                if self.__name == 'TAMboard_1':
-                    print("Publishing data")
 
                 sensor_parent.set_publish_data(self, data=buf_copy)
                 sensor_parent.publish(self)

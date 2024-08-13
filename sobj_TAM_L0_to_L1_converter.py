@@ -3,6 +3,7 @@
 '''
 
 import copy
+import datetime
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
@@ -31,11 +32,10 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        # print("Here")
         self.__data_received = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
         buffer = {}
 
-        print(self.__data_received)
+        # print(self.__data_received)
 
         # for key in self.__data_received:
         #     print(key + ':')

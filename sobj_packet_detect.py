@@ -3,35 +3,41 @@
 '''
 import threading
 import copy
-import datetime
+from datetime import datetime
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
 from command_packets.functions import ccsds_crc16 # pylint: disable=e0401
+from logging_system_display_python_api.logger import loggerCustom as logger
 
 class sobj_packet_detect(sensor_parent):
     '''
         This models counts the number of each type of packet recieved.
     '''
-    def __init__(self, coms):
-        self.__name = 'packet_detect'
+    def __init__(self, coms, name:str):
+        self.__name = name
         self.__config = sensor_config.sensors_config[self.__name]
+        self.__data_group = self.__config['packet_sturture'] # we are going to use the file name to track our data
         self.__serial_line_two_data = []
         self.__data_lock = threading.Lock()
         self.__coms = coms
 
-        self.__telemetry_packet_type_num = sensor_config.telemetry_packet_num
+        self.__telemetry_packet_type_num = sensor_config.telemetry_packet_num[self.__data_group]
         self.__packet_count = [0] * self.__telemetry_packet_type_num
         self.__bad_crc_count = 0
         self.__unknown_apid_count = 0
 
-        self.__telemetry_packet_types = sensor_config.telemetry_packet_types 
+        self.__telemetry_packet_types = sensor_config.telemetry_packet_types[self.__data_group]
         self.__telemetry_packet_types_lock = threading.Lock() 
 
-        self.__apids = sensor_config.vaild_apids
+
+        self.__apids = sensor_config.vaild_apids[self.__data_group]
         self.__apids_lock = threading.Lock()
 
-        self.__start_time = datetime.datetime.now()
+        self.__start_time = datetime.now()
+
+        self.__logger = logger(f'logs/{self.__name}.txt')
+        self.__logger_lock = threading.Lock()
 
 
         # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your row information on each sub index.
@@ -82,13 +88,12 @@ class sobj_packet_detect(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        if event == 'data_received_for_swp2_port_listener':
-            temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0])) #add the received data to the list of data we have received.
-            with self.__data_lock:
-                self.__serial_line_two_data += temp
-                data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
-                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name} ', self, [data_ready_for_processing]]) #start a thread to process data
-    def process_count_packets(self, num_packets):
+        temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0])) #add the received data to the list of data we have received.
+        with self.__data_lock:
+            self.__serial_line_two_data += temp
+            data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
+            self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [data_ready_for_processing, event]]) #start a thread to process data
+    def process_count_packets(self, num_packets, event):
         '''
             This function rips apart telemetry packets and counts how many of each type there is.  
         '''
@@ -117,7 +122,7 @@ class sobj_packet_detect(sensor_parent):
                 else:                                                                   # invalid crc
                     self.__bad_crc_count += 1
 
-        current_time = datetime.datetime.now()
+        current_time = datetime.now()
         elapsed_seconds = (current_time - self.__start_time).total_seconds()
         
         # Create data to save to the database
