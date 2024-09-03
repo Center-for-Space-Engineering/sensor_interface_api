@@ -46,8 +46,6 @@ class sensor_importer():
             system_constants.telemetry_packet_types[file_path] = telemetry_packet_types
             system_constants.telemetry_packet_num[file_path] = count
 
-        print(self.__source_list)
-
     def import_modules(self):
         '''
             this function import modules

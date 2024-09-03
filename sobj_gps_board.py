@@ -42,7 +42,7 @@ class sobj_gps_board(sensor_parent):
         if event == 'data_received_for_gps_port_listener':
             temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
             # pylint: disable=R1732
-            if self.__data_lock.acquire(timeout=1):
+            if self.__data_lock.acquire(timeout=10):
                 if start_partial and len(self.__serial_line_two_data) > 0: 
                     self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
                     self.__serial_line_two_data += temp[1:]
@@ -59,7 +59,7 @@ class sobj_gps_board(sensor_parent):
         '''
         sensor_parent.set_thread_status(self, 'Running')
         # pylint: disable=R1732
-        if self.__data_lock.acquire(timeout=1):
+        if self.__data_lock.acquire(timeout=10):
             #get the data out of the data storage. 
             temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
             self.__data_lock.release()
@@ -104,7 +104,7 @@ class sobj_gps_board(sensor_parent):
                     gpsWeek = results[0]
                     gps_MSOW = int(results[1] * 1000)
                     
-                    if self.__packet_number_lock.acquire(timeout=1):
+                    if self.__packet_number_lock.acquire(timeout=10):
                         copy_packet_num = self.__packet_number
                         self.__packet_number_lock.release()
                     else : 
@@ -114,7 +114,7 @@ class sobj_gps_board(sensor_parent):
 
                     processed_packets_list.append(dataPacket.to_bytes((dataPacket.bit_length() + 7) // 8, 'big')) #convert int into byte list
 
-                    if self.__packet_number_lock.acquire(timeout=1):
+                    if self.__packet_number_lock.acquire(timeout=10):
                         self.__packet_number+=1
                         self.__packet_number_lock.release()
                     else :
@@ -128,7 +128,7 @@ class sobj_gps_board(sensor_parent):
                 # print(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 dto = print_message_dto(f'Bad packet or partial received. For {self.__name}, Error {e}')
                 self.__coms.print_message(dto, 2)
-        if self.__data_lock.acquire(timeout=1): #update the list with unprocessed packets. 
+        if self.__data_lock.acquire(timeout=10): #update the list with unprocessed packets. 
             self.__serial_line_two_data = self.__serial_line_two_data[num_packets:]
             self.__data_lock.release()
         else :

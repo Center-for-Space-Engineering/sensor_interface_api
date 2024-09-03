@@ -51,7 +51,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             name : name of this sensor
             event_dict : any events the user wishes to add. 
     '''
-    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '') -> None: # pylint: disable=w0102,r0915
+    def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '', data_overwrite_exception:bool = True) -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
         self.__coms = coms
         self.__status_lock = threading.Lock()
@@ -71,6 +71,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__name_lock = threading.Lock()
         self.__data_buffer_overwrite = False
         self.__data_buffer_overwrite_lock = threading.Lock()
+        self.__data_overwrite_exception = data_overwrite_exception
         #check to make sure the name is a valid name
         pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
         if bool(re.match(pattern, name)):
@@ -198,7 +199,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             ARGS:
                 tap_name : the name of the tap you want to get data out of. 
         '''
-        if self.__data_buffer_overwrite_lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
             self.__data_buffer_overwrite = False
             self.__data_buffer_overwrite_lock.release()
         else :
@@ -225,8 +226,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
         if len(data) <= 0:
             return
-        if self.__data_buffer_overwrite_lock.acquire(timeout=1): # pylint: disable=R1732
-            if self.__data_buffer_overwrite: # pylint: disable=R1720
+        if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
+            if self.__data_buffer_overwrite and self.__data_overwrite_exception: # pylint: disable=R1720
                 raise RuntimeWarning(f"WARNING : Data in buffer for sensor {self.get_sensor_name()} has been overwritten. Consider processing your data faster or increasing you buffer size.")
             else :
                 self.__data_buffer_overwrite = True

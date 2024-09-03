@@ -67,9 +67,10 @@ class sobj_packet_processor(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
-
+        buffer_dict_to_publish = {
+        }
         for packet in data:
-            if len(packet) > 0:                
+            if len(packet) > 0:
                 # print(f"APID: {self.__apid}\n\tPacket {packet}")
                 sys_clk_ms = (packet[sensor_config.ccsds_header_len+1] << 24) | (packet[sensor_config.ccsds_header_len+2] << 16) | (packet[sensor_config.ccsds_header_len+3] << 8) | (packet[sensor_config.ccsds_header_len+4])
                 real_time_clk = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+3])
@@ -85,19 +86,23 @@ class sobj_packet_processor(sensor_parent):
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
                         self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
                         cur_position_bits += self.__unpacking_map[i]
-                
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
-                sensor_parent.save_data(self, table=f"{self.__packet_config['Mnemonic']}", data=buf_copy)
+                sensor_parent.save_data(self, table=f"{self.__packet_nmemonic}", data=buf_copy)
 
-                sensor_parent.set_publish_data(self, data=buf_copy)
-                sensor_parent.publish(self)
+                #lets save the data into a dictionary
+                all_keys_set = set(self.__buffer.keys()).union(buffer_dict_to_publish.keys())
 
+                for key in all_keys_set:
+                    buffer_dict_to_publish[key] = self.__buffer.get(key, []) + buffer_dict_to_publish.get(key, [])
 
                 # flush the buffer
                 for key in self.__buffer: # pylint: disable=C0206
                     for byte_storage in range(len(self.__buffer[key])):
                         self.__buffer[key][byte_storage] = 0xFFFFFFFF
+
+        sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
+        sensor_parent.publish(self)
         
     def bitarray_to_int(self, bit_array):
         '''
