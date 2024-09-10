@@ -121,6 +121,7 @@ class sobj_packet_detect(sensor_parent):
                     data[packet_data_tup[0]].append(packet)   # add packet to list in data dictionary for publishing
                 else:                                                                   # invalid crc
                     self.__bad_crc_count += 1
+                    self.__logger.send_log(f"bad_crc found: {packet[-2:]}")
 
         current_time = datetime.now()
         elapsed_seconds = (current_time - self.__start_time).total_seconds()

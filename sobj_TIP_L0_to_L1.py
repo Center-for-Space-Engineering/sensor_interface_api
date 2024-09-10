@@ -1,5 +1,5 @@
 '''
-    This module is for converting parsed TAM packets (L0 data) up to L1 data. 
+    This module is for converting parsed TIP packets (L0 data) up to L1 data. 
 '''
 
 import copy
@@ -32,6 +32,8 @@ class sobj_TIP_L0_to_L1(sensor_parent):
         self.__CycleCounts = 200
         self.__TIP_freq_Gain = 1
         self.__TIP_freq_Offset = 0
+        self.__TIP_ts = 1/160000000
+        self.__TIP_N = 20
 
     def process_data(self, _):
         '''
@@ -40,24 +42,30 @@ class sobj_TIP_L0_to_L1(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {}
+        buffer = {
+            'TFQ' : [],
+            'time_STM_CLK' : [],
+            'time_RTC' : [],
+        }
 
-        # self.__logger.send_log(f"data: {data}")
+        self.__logger.send_log(f"data: {type(data)}")
 
-        # for key in data:
-        #     match key:
-        #         case 'TFQ':
-        #             buffer[key] = []
-        #             for val in data[key]:                        
-        #                 # gain conversion
-        #                 converted = val*self.__TIP_freq_Gain + self.__TIP_freq_Offset
-        #                 buffer[key].append(converted)
+        for key in data:
+            match key:
+                case 'TFQ':
+                    buffer[key] = []
+                    for val in data[key]:                        
+                        # gain conversion
+                        # freq = val/(self.__TIP_ts * (2**self.__TIP_N))
+                        freq = val
+                        converted = freq*self.__TIP_freq_Gain + self.__TIP_freq_Offset
+                        buffer[key].append(converted)
 
-        #         case 'time_STM_CLK':
-        #             buffer[key] = data[key]
-        #         case 'time_RTC':
-        #             buffer[key] = data[key]
+                case 'time_STM_CLK':
+                    buffer[key] = data[key]
+                case 'time_RTC':
+                    buffer[key] = data[key]
 
-        # self.__logger.send_log(str(buffer))
+        self.__logger.send_log(str(buffer))
 
-        # sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)
+        sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)

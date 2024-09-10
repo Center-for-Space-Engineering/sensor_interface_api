@@ -1,5 +1,5 @@
 '''
-    This module is for converting parsed TAM packets (L0 data) up to L1 data. 
+    This module is for converting parsed SIP packets (L0 data) up to L1 data. 
 '''
 
 import copy
@@ -24,8 +24,7 @@ class sobj_SIP_L0_to_L1(sensor_parent):
                           ['Mag', 0, 'float'],
                           ['Phase', 0, 'float'], 
                           ['time_STM_CLK', 0, 'uint'],
-                          ['time_RTC', 0, 'uint'],
-                          ]
+                          ['time_RTC', 0, 'uint']]
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
@@ -68,6 +67,8 @@ class sobj_SIP_L0_to_L1(sensor_parent):
                         converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
                         # gain conversion
                         converted = converted*self.__SIP_I_Gain + self.__SIP_I_Offset
+                        # # RAW values
+                        # converted = val
                         buffer[key].append(converted)
                 case 'IQS':
                     buffer[key] = []
@@ -76,6 +77,8 @@ class sobj_SIP_L0_to_L1(sensor_parent):
                         converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
                         # gain conversion
                         converted = converted*self.__SIP_Q_Gain + self.__SIP_Q_Offset
+                        # # RAW values
+                        # converted = val
                         buffer[key].append(converted)
 
                 case 'time_STM_CLK':
