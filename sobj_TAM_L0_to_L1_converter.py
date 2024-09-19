@@ -79,4 +79,4 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
                     buffer[key] = data[key]
 
 
-        sensor_parent.save_data(self, table = 'TAM_L1', data = buffer)
+        # sensor_parent.save_data(self, table = 'TAM_L1', data = buffer)

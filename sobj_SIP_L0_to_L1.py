@@ -33,9 +33,9 @@ class sobj_SIP_L0_to_L1(sensor_parent):
 
         # conversion constants
         self.__CycleCounts = 200
-        self.__SIP_I_Gain = 1
+        self.__SIP_I_Gain = 1/(2**18)
         self.__SIP_I_Offset = 0
-        self.__SIP_Q_Gain = 1
+        self.__SIP_Q_Gain = 1/(2**18)
         self.__SIP_Q_Offset = 0
         self.__sign_bit = 1 << (19) # 20 bit numbers
 
