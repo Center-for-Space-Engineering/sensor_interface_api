@@ -32,6 +32,7 @@ class sobj_packet_processor(sensor_parent):
         self.__colms_list = [['temp', 0, 'uint'] for _ in range(self.__packet_config['Channels'])]
         self.__colms_list.append(['time_STM_CLK', 0, 'bigint'])
         self.__colms_list.append(['time_RTC', 0, 'uint'])
+        self.__colms_list.append(['packet_count', 0, 'uint'])
         self.__unpacking_map = [0  for _ in range(self.__packet_config['Channels'])]
 
         converted = True
@@ -56,6 +57,7 @@ class sobj_packet_processor(sensor_parent):
             self.__buffer[self.__colms_list[i][0]] =  [0xFFFFFFFF for _ in range(self.__packet_config['Granule count'])]   
         self.__buffer["time_STM_CLK"] = [bytearray(sensor_config.system_clock) for _ in range(self.__packet_config['Granule count'])]
         self.__buffer["time_RTC"] = [bytearray(sensor_config.real_time_clock) for _ in range(self.__packet_config['Granule count'])]
+        self.__buffer["packet_count"] = [bytearray(sensor_config.packet_count) for _ in range(self.__packet_config['Granule count'])]
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
@@ -72,6 +74,7 @@ class sobj_packet_processor(sensor_parent):
         for packet in data:
             if len(packet) > 0:
                 # print(f"APID: {self.__apid}\n\tPacket {packet}")
+                packet_count = ((packet[2] << 8) | (packet[3])) & 0x3FFF
                 sys_clk_ms = (packet[sensor_config.ccsds_header_len+1] << 24) | (packet[sensor_config.ccsds_header_len+2] << 16) | (packet[sensor_config.ccsds_header_len+3] << 8) | (packet[sensor_config.ccsds_header_len+4])
                 real_time_clk = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+3])
                 cur_position_bits = int((sensor_config.ccsds_header_len+1 + sensor_config.system_clock + sensor_config.real_time_clock) * 8)
@@ -80,11 +83,16 @@ class sobj_packet_processor(sensor_parent):
                 for j in range(self.__packet_config['Granule count']):
                     self.__buffer['time_STM_CLK'][j] = sys_clk_ms
                     self.__buffer['time_RTC'][j] = real_time_clk
-                    sys_clk_ms += int((1/(self.__packet_config['G. Rate'])) * 1000) # system clock is in milliseconds
+                    self.__buffer['packet_count'][j] = packet_count
+                    sys_clk_ms = int((1/(self.__packet_config['G. Rate'])) * 1000) + sys_clk_ms if self.__packet_config['G. Rate'] != 0 else sys_clk_ms # system clock is in milliseconds
                     for i in range(len(self.__unpacking_map)): # pylint: disable=C0200
                         # print(f"APID: {self.__apid}\tPacket length: {len(packet)}\tPacket length bits: {len(packet_bits)}\tcolmslist curr: {self.__colms_list[i]}\t cur_position: {cur_position_bits}\tcurpostiion+unpacking: {cur_position_bits+self.__unpacking_map[i]}")
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
-                        self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
+                        if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
+                            self.__buffer[self.__colms_list[i][0]][j] = 0
+                            self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
+                        else :
+                            self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
                         cur_position_bits += self.__unpacking_map[i]
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)

@@ -19,7 +19,8 @@ class sobj_QIP_L0_to_L1(sensor_parent):
         self.__logger = logger(f'logs/{self.__name}.txt')
 
         self.__table_structure = {
-             'QIP_L1' : [ ['IiS', 0, 'float'], 
+             'QIP_L1' : [ ['TFQ', 0, 'float'], 
+                          ['IiS', 0, 'float'], 
                           ['IQS', 0, 'float'], 
                           ['Mag', 0, 'float'],
                           ['Phase', 0, 'float'], 
@@ -33,6 +34,8 @@ class sobj_QIP_L0_to_L1(sensor_parent):
 
         # conversion constants
         self.__CycleCounts = 200
+        self.__QIP_freq_Gain = 1/(1.25e-8 * (2**24) * 1e6)
+        self.__QIP_freq_Offset = 0
         self.__QIP_I_Gain = 1/(2**18)
         self.__QIP_I_Offset = 0
         self.__QIP_Q_Gain = 1/(2**18)
@@ -47,8 +50,9 @@ class sobj_QIP_L0_to_L1(sensor_parent):
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
         buffer = {
-            'IiS' : [],
-            'IQS' : [],
+            'TFQ' : [],
+            'IiQ' : [],
+            'IQQ' : [],
             'Mag' : [],
             'Phase' : [],
             'time_STM_CLK' : [],
@@ -60,7 +64,15 @@ class sobj_QIP_L0_to_L1(sensor_parent):
         for key in data:
             # self.__logger.send_log(f"key: {key}")
             match key:
-                case 'IiS':
+                case 'TFQ':
+                    buffer[key] = []
+                    for val in data[key]:                        
+                        # gain conversion
+                        # freq = val/(self.__TIP_ts * (2**self.__TIP_N))
+                        freq = val
+                        converted = freq*self.__QIP_freq_Gain + self.__QIP_freq_Offset
+                        buffer[key].append(converted)
+                case 'IiQ':
                     buffer[key] = []
                     for val in data[key]:
                         # sign extension
@@ -70,7 +82,7 @@ class sobj_QIP_L0_to_L1(sensor_parent):
                         # # RAW values
                         # converted = val
                         buffer[key].append(converted)
-                case 'IQS':
+                case 'IQQ':
                     buffer[key] = []
                     for val in data[key]:
                         # sign extension
@@ -87,9 +99,11 @@ class sobj_QIP_L0_to_L1(sensor_parent):
                     buffer[key] = data[key]
         # self.__logger.send_log(f"buffer: {buffer}")
 
-        buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiS'], buffer['IQS'])]
-        buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiS'], buffer['IQS'])]
+        buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiQ'], buffer['IQQ'])]
+        buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiQ'], buffer['IQQ'])]
 
-        self.__logger.send_log(str(buffer))
+        # self.__logger.send_log(str(buffer))
+
+
 
         sensor_parent.save_data(self, table = 'QIP_L1', data = buffer)

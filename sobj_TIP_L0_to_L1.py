@@ -30,10 +30,10 @@ class sobj_TIP_L0_to_L1(sensor_parent):
 
         # conversion constants
         self.__CycleCounts = 200
-        self.__TIP_freq_Gain = 1
+        self.__TIP_ts = 1/80e6
+        self.__TIP_N = 24
+        self.__TIP_freq_Gain = 1/1e6
         self.__TIP_freq_Offset = 0
-        self.__TIP_ts = 1/160000000
-        self.__TIP_N = 20
 
     def process_data(self, _):
         '''
@@ -56,8 +56,8 @@ class sobj_TIP_L0_to_L1(sensor_parent):
                     buffer[key] = []
                     for val in data[key]:                        
                         # gain conversion
-                        # freq = val/(self.__TIP_ts * (2**self.__TIP_N))
-                        freq = val
+                        freq = val/(self.__TIP_ts * (2**self.__TIP_N))
+                        # freq = val
                         converted = freq*self.__TIP_freq_Gain + self.__TIP_freq_Offset
                         buffer[key].append(converted)
 

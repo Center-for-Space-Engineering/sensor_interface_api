@@ -63,7 +63,8 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                           ['TBD10', 0, 'uint'],
                           ['TBD11', 0, 'uint'],
                           ['time_STM_CLK', 0, 'uint'],
-                          ['time_RTC', 0, 'uint'], ]
+                          ['time_RTC', 0, 'uint'],
+                          ['packet_count', 0, 'uint'], ]
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
@@ -83,7 +84,8 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        self.__logger.send_log(f"data: {data}")
+        # sensor_parent.save_data(self, table='STT_L1', data=data)
+        self.__logger.send_log(f"data: {data}\n")
         # return
         buffer = {}
         for key in data:
@@ -134,9 +136,12 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                     buffer[key] = [(data[key][0] * self.__LSB) / (100/274)]
                 case '4ADCT':
                     buffer[key] = [(data[key][0] >> 2) * 0.03125]
+                case 'packet_count':
+                    buffer[key] = [data[key][0]]
                 case _:
                     buffer[key] = [data[key][0]]
         # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
         # return
         buf_copy = copy.deepcopy(buffer)
+        self.__logger.send_log(f"buffer: {buffer}\n\n")
         sensor_parent.save_data(self, table='STT_L1', data=buf_copy)
