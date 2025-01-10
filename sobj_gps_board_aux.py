@@ -157,11 +157,11 @@ class sobj_gps_board_aux(sensor_parent):
         '''
             Get the gps data from UTC time.
         '''
-        _ = 604800 #seconds in week
+        secsInWeek = 604800
         secsInDay = 86400
         gpsEpoch = datetime.datetime(1980, 1, 6, 0, 0, 0)
 
-        utc_time = datetime.datetime(year, month, day, hour, minute, int(sec))
+        utc_time = datetime.datetime(year + 2000, month, day, hour, minute, int(sec))
         utc_time += datetime.timedelta(seconds=leapSecs)
 
         # Calculate time difference from GPS epoch
