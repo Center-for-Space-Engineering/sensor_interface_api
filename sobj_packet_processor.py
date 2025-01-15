@@ -33,6 +33,7 @@ class sobj_packet_processor(sensor_parent):
         self.__colms_list.append(['time_STM_CLK', 0, 'bigint'])
         self.__colms_list.append(['time_RTC', 0, 'uint'])
         self.__colms_list.append(['packet_count', 0, 'uint'])
+        self.__colms_list.append(['granule_index', 0, 'uint'])
         self.__unpacking_map = [0  for _ in range(self.__packet_config['Channels'])]
 
         converted = True
@@ -58,6 +59,7 @@ class sobj_packet_processor(sensor_parent):
         self.__buffer["time_STM_CLK"] = [bytearray(sensor_config.system_clock) for _ in range(self.__packet_config['Granule count'])]
         self.__buffer["time_RTC"] = [bytearray(sensor_config.real_time_clock) for _ in range(self.__packet_config['Granule count'])]
         self.__buffer["packet_count"] = [bytearray(sensor_config.packet_count) for _ in range(self.__packet_config['Granule count'])]
+        self.__buffer["granule_index"] = [j for j in range(self.__packet_config['Granule count'])]
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
@@ -106,8 +108,9 @@ class sobj_packet_processor(sensor_parent):
 
                 # flush the buffer
                 for key in self.__buffer: # pylint: disable=C0206
-                    for byte_storage in range(len(self.__buffer[key])):
-                        self.__buffer[key][byte_storage] = 0xFFFFFFFF
+                    if not key == 'granule_index':
+                        for byte_storage in range(len(self.__buffer[key])):
+                            self.__buffer[key][byte_storage] = 0xFFFFFFFF
 
         sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
         sensor_parent.publish(self)

@@ -23,7 +23,9 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
                           ['MBY', 0, 'float'], 
                           ['MBZ', 0, 'float'],
                           ['time_STM_CLK', 0, 'uint'],
-                          ['time_RTC', 0, 'uint'], ]
+                          ['time_RTC', 0, 'uint'], 
+                          ['granule_index', 0, 'uint'],
+                          ]
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
@@ -76,6 +78,8 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
                 case 'time_STM_CLK':
                     buffer[key] = data[key]
                 case 'time_RTC':
+                    buffer[key] = data[key]
+                case 'granule_index':
                     buffer[key] = data[key]
 
 

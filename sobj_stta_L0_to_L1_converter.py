@@ -60,7 +60,9 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
                           ['TBD11', 0, 'uint'],
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'],
-                          ['packet_count', 0, 'uint'], ]
+                          ['packet_count', 0, 'uint'], 
+                          ['granule_index', 0, 'uint'],
+                          ]
         }
 
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
