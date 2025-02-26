@@ -147,35 +147,25 @@ class sobj_packet_processor(sensor_parent):
                         PPSS = (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+4])
                         PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.gps_weeks+sensor_config.gps_milliseconds+sensor_config.system_clock+3])
 
-                        # self.__logger.send_log(f"{packet=}")
-                        # self.__logger.send_log(f"{sensor_config.ccsds_header_len=}")
                         gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2]) # Value is dubious
                         gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.gps_weeks+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.gps_weeks+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.gps_weeks+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.gps_weeks+4])
                         
-                        # self.__logger.send_log(f"PPS_UTC week and milli {gps_week=} {gps_milli=}")
                         if gps_week != None and gps_milli != None:
                             newPPS_UTC = (datetime(1980, 1, 6, 0 , 0) + timedelta(weeks=gps_week) + timedelta(milliseconds=gps_milli))
                             self.__buffer['PPS_UTC'][j] = newPPS_UTC.strftime('%Y-%m-%d %H:%M:%-S.%f')
                             sensor_config.PPS_UTC = newPPS_UTC
-                            # self.__logger.send_log(f"PPS_UTC Updated: New val={self.__buffer['PPS_UTC'][j]}")
                         else:
                             self.__buffer['PPS_UTC'][j] = None # Swenson recommended None / null so the field comes in empty into the database
                             sensor_config.PPS_UTC = None
 
 
-                        # self.__logger.send_log(f"datetime from PPS_UTC {datetime.fromtimestamp(sensor_config.PPS_UTC)}")
                         if (sensor_config.PPS_UTC != None):
-                            # self.__logger.send_log(f"{PPSS=}")
-                            # self.__logger.send_log(f"{PPSR=}")
-                            # self.__logger.send_log(f"{datetime.fromtimestamp(sensor_config.PPS_UTC)=}")
+
                             sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
                             sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
 
                             self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
                             self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
-                            # self.__logger.send_log(f"PPSS_EPOCH Updated: New val={self.__buffer['PPSS_EPOCH'][j]}")
-                            # self.__logger.send_log(f"PPSR_EPOCH Updated: New val={self.__buffer['PPSR_EPOCH'][j]}")
-                            # self.__logger.send_log(f"Epochs updated")
                         else:
                             self.__buffer['PPSS_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
                             self.__buffer['PPSR_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
@@ -213,24 +203,10 @@ class sobj_packet_processor(sensor_parent):
 
             returned obj is datetime obj
         '''
-        # self.__logger.send_log(f"Inside packet_processor.to_UTC. {sensor_config.PPSR_epoch=} {sensor_config.PPSS_epoch=}")
         if (is_RTC):
             new_datetime = (sensor_config.PPSR_epoch) + timedelta(seconds=gps_clock)
-            # self.__logger.send_log(f"new_datetime = {new_datetime.timestamp()}")
             return  new_datetime
         else:
             new_datetime = (sensor_config.PPSS_epoch) + timedelta(milliseconds=gps_clock)
-            # self.__logger.send_log(f"new_datetime = {new_datetime.timestamp()}")
-            return new_datetime
-
-        # # If clock is type bigint, it is the system clock and measures in milliseconds
-        # if (type(gps_clock) is 'bigint'):
-        #     return datetime.datetime(sensor_config.PPSS_epoch + datetime.timedelta(milliseconds=gps_clock))
-        # # If clock is type uint, it is the real time clock and measures in seconds
-        # elif (type(gps_clock) is 'uint'):
-        #     return datetime.datetime(sensor_config.PPSR_epoch + datetime.timedelta(seconds=gps_clock))
-        # else:
-        #     return 0
-                
-        
+            return new_datetime              
         
