@@ -57,7 +57,8 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
                           ['H5S', 0, 'uint'],
                           ['H6S', 0, 'uint'],
                           ['REG_5V', 0, 'uint'],
-                          ['TBD11', 0, 'uint'],
+                          ['GPS_C', 0, 'uint'],
+                          ['DEBUG', 0, 'uint'],
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'],
                           ['packet_count', 0, 'uint'], 
@@ -81,57 +82,58 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        # sensor_parent.save_data(self, table='STT_L1', data=data)
-        self.__logger.send_log(f"data: {data}\n")
-        # return
-        buffer = {}
-        for key in data:
-            match key:
-                case '1ADC0':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '1ADC1':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (100/274)] 
-                case '1ADC2':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '1ADC3':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '1ADCT':
-                    buffer[key] = [(data[key][0] >> 2) * 0.03125] # add in sign bit checking
-                case '2ADC0':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '2ADC1':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '2ADC2':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '2ADC3':
-                    buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
-                case '2ADCT':
-                    buffer[key] = [(data[key][0] >> 2) * 0.03125]
-                case '3ADC0':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (100/243)]
-                case '3ADC1':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (1/3)]
-                case '3ADC2':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (100/274)]
-                case '3ADC3':
-                    buffer[key] = [(data[key][0] * self.__LSB)]
-                case '3ADCT':
-                    buffer[key] = [(data[key][0] >> 2) * 0.03125]
-                case '4ADC0':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (51/151)]
-                case '4ADC1':
-                    buffer[key] = [(data[key][0] * self.__LSB) / (1/2)]
-                case '4ADC2':
-                    buffer[key] = [(data[key][0] * self.__LSB)]
-                case '4ADC3':
-                    buffer[key] = [(data[key][0] * self.__LSB)]
-                case '4ADCT':
-                    buffer[key] = [(data[key][0] >> 2) * 0.03125]
-                case _:
-                    buffer[key] = [data[key][0]]
-        # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
-        # return
-        buf_copy = copy.deepcopy(buffer)
-        self.__logger.send_log(f"buffer: {buffer}\n\n")
-        sensor_parent.save_data(self, table='STTA_L1', data=buf_copy)
+        # data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
+        # # sensor_parent.save_data(self, table='STT_L1', data=data)
+        # self.__logger.send_log(f"data: {data}\n")
+        # # return
+        # buffer = {}
+        # for key in data:
+        #     match key:
+        #         case '1ADC0':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '1ADC1':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (100/274)] 
+        #         case '1ADC2':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '1ADC3':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '1ADCT':
+        #             buffer[key] = [(data[key][0] >> 2) * 0.03125] # add in sign bit checking
+        #         case '2ADC0':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '2ADC1':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '2ADC2':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '2ADC3':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / self.__current_gain]
+        #         case '2ADCT':
+        #             buffer[key] = [(data[key][0] >> 2) * 0.03125]
+        #         case '3ADC0':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (100/243)]
+        #         case '3ADC1':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (1/3)]
+        #         case '3ADC2':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (100/274)]
+        #         case '3ADC3':
+        #             buffer[key] = [(data[key][0] * self.__LSB)]
+        #         case '3ADCT':
+        #             buffer[key] = [(data[key][0] >> 2) * 0.03125]
+        #         case '4ADC0':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (51/151)]
+        #         case '4ADC1':
+        #             buffer[key] = [(data[key][0] * self.__LSB) / (1/2)]
+        #         case '4ADC2':
+        #             buffer[key] = [(data[key][0] * self.__LSB)]
+        #         case '4ADC3':
+        #             buffer[key] = [(data[key][0] * self.__LSB)]
+        #         case '4ADCT':
+        #             buffer[key] = [(data[key][0] >> 2) * 0.03125]
+        #         case _:
+        #             buffer[key] = [data[key][0]]
+        # # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
+        # # return
+        # buf_copy = copy.deepcopy(buffer)
+        # self.__logger.send_log(f"buffer: {buffer}\n\n")
+        # sensor_parent.save_data(self, table='STTA_L1', data=buf_copy)
+        pass

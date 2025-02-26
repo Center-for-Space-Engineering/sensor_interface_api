@@ -40,6 +40,8 @@ class sobj_packet_processor(sensor_parent):
 
         for key in self.__packet_config["granule definition"]:
             try : 
+                if self.__packet_config["granule definition"][key]['Signed']:
+                    self.__colms_list[int (self.__packet_config["granule definition"][key]['Order'] - 1)][2] = 'int'
                 if int (self.__packet_config["granule definition"][key]['Order'] - 1) >= self.__packet_config['Channels']: # some timnes we have granules that have tbh parts
                     continue
                 self.__colms_list[int (self.__packet_config["granule definition"][key]['Order'] - 1)][0] =  key
@@ -64,6 +66,7 @@ class sobj_packet_processor(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
+        self.__logger.send_log(f"Setup complete{self.__packet_nmemonic}")
     def process_data(self, _):
         '''
             This function gets called when one of the tap request gets any data. 
@@ -94,7 +97,12 @@ class sobj_packet_processor(sensor_parent):
                             self.__buffer[self.__colms_list[i][0]][j] = 0
                             self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
                         else :
-                            self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
+                            if self.__colms_list[i][2] == 'int' and temp[0] == 1:
+                                while len(temp) < 32:
+                                    temp.insert(0,1)
+                                self.__buffer[self.__colms_list[i][0]][j] = int.from_bytes(temp, signed = True)
+                            else:
+                                self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
                         cur_position_bits += self.__unpacking_map[i]
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
