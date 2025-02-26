@@ -13,6 +13,8 @@ from datetime import datetime
 from threading_python_api.threadWrapper import threadWrapper # pylint: disable=e0401
 from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator # pylint: disable=e0401
 import system_constants as sys_c # pylint: disable=e0401
+from logging_system_display_python_api.logger import loggerCustom # pylint: disable=e0401
+
 
 class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
@@ -25,7 +27,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
          get_data_received : Returns the last sample the sensor returned.
          get_taps : Returns a list of taps that the user has requested for this class. 
          process_data : This is the function that is called when the data_received event is called. 
-         make_data_tap : sends a request to the serial listener telling it to send data to this class.
+         make_data_tap : sends a request to another class telling it to send data to this class.
          send_tap : this function is what the serial listener calls to send the tab to this class.
          create_tap : this function creates a tab to this class.
          get_sensor_name : This function returns the name of the sensor. The users class need to implement this.
@@ -60,6 +62,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__data_lock = threading.Lock()
         self.__tap_requests = []
         self.__tap_requests_lock = threading.Lock()
+        self.__tap_subscribers = []
+        self.__tap_subscribers_lock = threading.Lock()
         self.__config = config
         self.__config_lock = threading.Lock()
         self.__publish_data = []
@@ -78,6 +82,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             self.__name = name
         else :
             raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
+        # self.__logger = loggerCustom(f"logs/sensor_parent_{self.__name}.txt")
         self.__events = events_dict
         self.__active = False
         self.__active__lock = threading.Lock()
@@ -115,6 +120,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         ##################### set up the threadWrapper stuff #####################
         self.__function_dict = { 
             'create_tap' : self.create_tap,
+            'ready_for_data': self.ready_for_data
         }
         threadWrapper.__init__(self, self.__function_dict, self.__events)
         ##########################################################################
@@ -186,6 +192,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function is for setting the threading status AKA your processing threads that get started. USE 'Running', 'Complete' or 'Error'.
         '''
         threadWrapper.set_status(self, status)
+    def ready_for_data(self):
+        if self.__data_buffer_overwrite:
+            return False
+        else:
+            return True
     def process_data(self, event):
         '''
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
@@ -224,24 +235,37 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             This is the function that is called by the class you asked to make a tap.
         '''
-        if len(data) <= 0:
-            return
         if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
-            if self.__data_buffer_overwrite and self.__data_overwrite_exception: # pylint: disable=R1720
-                raise RuntimeWarning(f"WARNING : Data in buffer for sensor {self.get_sensor_name()} has been overwritten. Consider processing your data faster or increasing you buffer size.")
-            else :
-                self.__data_buffer_overwrite = True
+            if len(data) <= 0:
+                self.__data_buffer_overwrite = False
+                self.__data_buffer_overwrite_lock.release()
+                return
             self.__data_buffer_overwrite_lock.release()
         else :
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
+        
+        not_ready_bool = True
+
+        if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
+            not_ready_bool = self.__data_buffer_overwrite
+            self.__data_buffer_overwrite_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data buffer overwrite lock.")
+        
+        while not_ready_bool == True:
+            if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
+                not_ready_bool = self.__data_buffer_overwrite
+                self.__data_buffer_overwrite_lock.release()
+            else :
+                raise RuntimeError("Could not acquire data buffer overwrite lock.")
+            time.sleep(1)
+
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
             threadWrapper.set_event(self, f'data_received_for_{sender}')
             self.__data_lock.release()
         else :
-            raise RuntimeError("Could not acquire data lock")
-        
-        
+            raise RuntimeError("Could not acquire data lock")          
     def get_taps(self):
         '''
             This function returns the list of requested taps 
@@ -259,16 +283,17 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 args[0] : tab function to call.  
                 args[1] : name of subscriber.  
         '''
-        if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
-            self.__tap_requests.append(args[0])
-            self.__tap_requests_lock.release()
-        else :
-            raise RuntimeError("Could not acquire tap requests lock")
-        if self.__config_lock.acquire(timeout=1): # pylint: disable=R1732
-            self.__config['subscribers'] = args[1]
-            self.__config_lock.release()
-        else : 
-            raise RuntimeError("Could not acquire config lock")
+        if args[0] != None:
+            if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
+                self.__tap_requests.append(args[0])
+                self.__tap_requests_lock.release()
+            else :
+                raise RuntimeError("Could not acquire tap requests lock")
+            if self.__tap_subscribers_lock.acquire(timeout=1): # pylint: disable=R1732
+                self.__tap_subscribers.append(args[1])
+                self.__tap_subscribers_lock.release()
+            else : 
+                raise RuntimeError("Could not acquire config lock")
     def get_sensor_name(self):
         '''
             This function returns the name of the sensor.
@@ -301,19 +326,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else : 
             raise RuntimeError("Could not acquire active lock")
         if active:
-            while True:
-                if self.__publish_data_lock.acquire(timeout=1): # pylint: disable=R1732
-                    data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-                    self.__publish_data_lock.release()
-                else : 
-                    raise RuntimeError("Could not acquire publish data lock")
-                if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
-                    for tap in self.__tap_requests:
-                        temp  = copy.deepcopy(data_copy) #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
-                        tap(temp, self.get_sensor_name()) # call the get sensor name so that the data is mutex protected. 
-                    self.__tap_requests_lock.release()
-                else : 
-                    raise RuntimeError("Could not axqure tap request lock")
+            while True:              
+                data_copy = self.send_data_to_tap()
+
                 if self.__last_published_data_lock.acquire(timeout=1): # pylint: disable=R1732
                     self.__last_published_data['time'] = str(datetime.now())
                     try :
@@ -330,19 +345,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     raise RuntimeError("Could not acquire has been published lock")
                 time.sleep(interval_pub)
         else :
-            if self.__publish_data_lock.acquire(timeout=1): # pylint: disable=R1732
-                data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
-                self.__publish_data_lock.release()
-            else :
-                raise RuntimeError("Could not acquire publish data lock")
-            if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
-                for tap in self.__tap_requests:
-                    temp  = copy.deepcopy(data_copy) #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate. 
-                    tap(temp, self.get_sensor_name()) # call the get sensor name so that the data is mutex protected.
-                self.__tap_requests_lock.release()
-            else : 
-                raise RuntimeError('Couald not acquire tap requests lock')
-            
+            data_copy = self.send_data_to_tap()
+
             if self.__last_published_data_lock.acquire(timeout=1): # pylint: disable=R1732
                 self.__last_published_data['time'] = str(datetime.now())
                 try:
@@ -357,6 +361,49 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             self.__has_been_published_lock.release()
         else : 
             raise RuntimeError("Could not acquire has been published lock")
+    def send_data_to_tap(self):
+        '''
+            this send the data to all the tap request we have received. 
+        '''
+        if self.__publish_data_lock.acquire(timeout=1): # pylint: disable=R1732
+            data_copy = self.__publish_data #I am making a copy of the data here, so the data is better protected.
+            self.__publish_data_lock.release()
+        else :
+            raise RuntimeError("Could not acquire publish data lock")
+        
+        config_copy_subscribers = []
+
+        if self.__tap_subscribers_lock.acquire(timeout=1): # pylint: disable=R1732
+            config_copy_subscribers = copy.deepcopy(self.__tap_subscribers)
+
+            self.__tap_subscribers_lock.release()
+        else : 
+            raise RuntimeError('Could not acquire config lock')
+
+        i = 0
+
+        for subscriber in config_copy_subscribers: #loop on copies
+            temp  = copy.deepcopy(data_copy) #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate.
+
+            is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
+            is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
+
+            while is_ready is not True:
+                time.sleep(0.01)
+                is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
+            
+                if not is_ready:
+                    is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
+                    is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
+
+            if is_ready:
+                if self.__tap_requests_lock.acquire(timeout=10): # pylint: disable=R1732
+                    self.__tap_requests[i](temp, self.get_sensor_name()) # call the get sensor name so that the data is mutex protected.
+                    i += 1
+                    self.__tap_requests_lock.release()
+                else : 
+                    raise RuntimeError('Couald not acquire tap requests lock')
+        return data_copy      
     def set_publish_data(self, data):
         '''
             This function takes a list of list to publish.

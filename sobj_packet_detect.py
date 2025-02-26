@@ -56,24 +56,18 @@ class sobj_packet_detect(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=00, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
-    def is_vaild_apid(self, apid):
+    def is_vaild_apid(self, apid, apids):
         '''
             check apid agaist list of vaild apids
         '''
-        check = False
-        if self.__apids_lock.acquire(timeout=1): # pylint: disable=R1732
-            check = apid in self.__apids
-            self.__apids_lock.release()
-        else :
-            raise RuntimeError("Could not acquire apids lock")
-        return check
+        return apid in apids
     def get_packet_info(self, apid):
         '''
             this function searches thorugh the list of telemetry packets then returns to corrisponding information 
             for the given apid.
         '''
         temp = ()
-        if self.__telemetry_packet_types_lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__telemetry_packet_types_lock.acquire(): # pylint: disable=R1732
             for tup in self.__telemetry_packet_types:
                 if apid in tup:
                     temp = tup
@@ -88,30 +82,47 @@ class sobj_packet_detect(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0])) #add the received data to the list of data we have received.
+        telemetry_packets_copy = None
+        apids = None
+        if self.__telemetry_packet_types_lock.acquire(): # pylint: disable=R1732
+            telemetry_packets_copy = copy.deepcopy(self.__telemetry_packet_types)
+            self.__telemetry_packet_types_lock.release()
+        else :
+            raise RuntimeError("Could not acquire telementry packet types lock")
+        
+        if self.__apids_lock.acquire(): # pylint: disable=R1732
+            apids = copy.deepcopy(self.__apids)
+            self.__apids_lock.release()
+        else :
+            raise RuntimeError("Could not acquire apids lock")
+        
+        
+        # self.__logger.send_log(str(event))
+        event_name = event[18:]
+        temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, event_name)) #add the received data to the list of data we have received.
+        
         with self.__data_lock:
             self.__serial_line_two_data += temp
             data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
-            self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [data_ready_for_processing, event]]) #start a thread to process data
-    def process_count_packets(self, num_packets, event):
+            self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [copy.deepcopy(self.__serial_line_two_data[:data_ready_for_processing]), event, apids, telemetry_packets_copy]]) #start a thread to process data 
+            self.__serial_line_two_data = self.__serial_line_two_data[data_ready_for_processing:]
+    def process_count_packets(self, temp_data_structure, event, apids, telemetry_packets_copy):
         '''
             This function rips apart telemetry packets and counts how many of each type there is.  
         '''
         sensor_parent.set_thread_status(self, 'Running')
-        with self.__data_lock: #get the data out of the data storage. 
-            temp_data_structure = copy.deepcopy(self.__serial_line_two_data[:num_packets])
-
         # data to publish
         data = {tup[0]: [] for tup in self.__telemetry_packet_types} #pos zero is the packet Mnemonic
 
         # sort the packets basied on apid and mnemonic
         for packet in temp_data_structure:
+            # self.__logger.send_log(f"Packet: {packet.hex()}")
             #get apid
             APID = int.from_bytes(packet[:2], 'big') & 0x07ff
             apid_str = f"{APID:03X}"
 
             #vaildation check
-            if not self.is_vaild_apid(apid_str):
+            if not self.is_vaild_apid(apid_str, apids):
                 self.__unknown_apid_count += 1
             else : 
                 #sort packets into their corrisponding list
@@ -132,13 +143,9 @@ class sobj_packet_detect(sensor_parent):
             'Ukwn' : [self.__unknown_apid_count],
             'bad_crc' : [self.__bad_crc_count]
         }
-        if self.__telemetry_packet_types_lock.acquire(timeout=1): # pylint: disable=R1732
-            telemtry_packets_copy = copy.deepcopy(self.__telemetry_packet_types)
-            self.__telemetry_packet_types_lock.release()
-        else :
-            raise RuntimeError("Could not acquire telementry packet types lock")
+        
         #put all the packet counts in the corret place
-        for packet in telemtry_packets_copy:
+        for packet in telemetry_packets_copy:
             save_data[packet[0]] = [self.__packet_count[packet[2]]]
         #save counts
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_counts', data=save_data)
@@ -150,7 +157,7 @@ class sobj_packet_detect(sensor_parent):
             'bad_crc' : [0 if self.__bad_crc_count == 0.0 else elapsed_seconds/self.__bad_crc_count]
         }
         #put all the packet counts in the corret place
-        for packet in telemtry_packets_copy:
+        for packet in telemetry_packets_copy:
             save_data[packet[0]] = [0 if self.__packet_count[packet[2]] == 0 else elapsed_seconds/self.__packet_count[packet[2]]]
         #save rate data
         sensor_parent.save_data(self, table=f'processed_data_for_{self.__name}_rates', data=save_data)
@@ -158,9 +165,5 @@ class sobj_packet_detect(sensor_parent):
         #now we need to publish the data NOTE: remember we are a passive sensor. 
         sensor_parent.set_publish_data(self, data=data)
         sensor_parent.publish(self)
-
-        
-        with self.__data_lock: #update the list with unprocessed packets. 
-            self.__serial_line_two_data = self.__serial_line_two_data[num_packets:]
 
         sensor_parent.set_thread_status(self, 'Complete')

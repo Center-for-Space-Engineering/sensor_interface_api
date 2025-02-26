@@ -22,6 +22,10 @@ class sobj_TIP_L0_to_L1(sensor_parent):
              'TIP_L1' : [ ['TFQ', 0, 'float'], 
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'], 
+                          ['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"],
+                          ['time_RTC_UTC', 0, 'mysql_milli_datetime', "secondary_index"],
+                          ['received_at', 0, 'uint', "nullable"],
+                          ['packet_count', 0, 'uint'],
                           ['granule_index', 0, 'uint'],
                           ]
         }
@@ -48,10 +52,14 @@ class sobj_TIP_L0_to_L1(sensor_parent):
             'TFQ' : [],
             'time_STM_CLK' : [],
             'time_RTC' : [],
+            'time_STM_CLK_UTC' : [],
+            'time_RTC_UTC' : [],
+            'received_at' : [],
+            'packet_count' : [],
             'granule_index' : [],
         }
 
-        self.__logger.send_log(f"data: {type(data)}")
+        # self.__logger.send_log(f"data: {str(data.keys())}")
 
         for key in data:
             match key:
@@ -63,14 +71,18 @@ class sobj_TIP_L0_to_L1(sensor_parent):
                         # freq = val
                         converted = freq*self.__TIP_freq_Gain + self.__TIP_freq_Offset
                         buffer[key].append(converted)
+                # case 'time_STM_CLK':
+                #     buffer[key] = data[key]
+                # case 'time_RTC':
+                #     buffer[key] = data[key]
+                # case 'granule_index':
+                #     buffer[key] = data[key]
+                case _:
+                    buffer[key] = data[key]
 
-                case 'time_STM_CLK':
-                    buffer[key] = data[key]
-                case 'time_RTC':
-                    buffer[key] = data[key]
-                case 'granule_index':
-                    buffer[key] = data[key]
+        for key in buffer:
+            self.__logger.send_log(f"{key}: {str(buffer[key])}")
 
-        self.__logger.send_log(str(buffer))
+        self.__logger.send_log("------------------------------------")
 
         sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)

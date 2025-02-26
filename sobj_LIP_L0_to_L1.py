@@ -26,6 +26,10 @@ class sobj_LIP_L0_to_L1(sensor_parent):
                           ['Phase', 0, 'float'], 
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'],
+                          ['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"],
+                          ['time_RTC_UTC', 0, 'mysql_milli_datetime', "secondary_index"],
+                          ['received_at', 0, 'uint', "nullable"],
+                          ['packet_count', 0, 'uint'],
                           ['granule_index', 0, 'uint'],
              ]
         }
@@ -61,6 +65,10 @@ class sobj_LIP_L0_to_L1(sensor_parent):
             'Phase' : [],
             'time_STM_CLK' : [],
             'time_RTC' : [],
+            'time_STM_CLK_UTC' : [],
+            'time_RTC_UTC' : [],
+            'received_at' : [],
+            'packet_count' : [],
             'granule_index':[],
 
         }
@@ -108,6 +116,8 @@ class sobj_LIP_L0_to_L1(sensor_parent):
                 case 'time_RTC':
                     buffer[key] = data[key]
                 case 'granule_index':
+                    buffer[key] = data[key]
+                case _ :
                     buffer[key] = data[key]
 
         # self.__logger.send_log(f"buffer: {buffer}")

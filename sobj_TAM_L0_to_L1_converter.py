@@ -24,6 +24,9 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
                           ['MBZ', 0, 'float'],
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'], 
+                          ['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"],
+                          ['time_RTC_UTC', 0, 'mysql_milli_datetime', "secondary_index"],
+                          ['received_at', 0, 'uint', "nullable"],
                           ['granule_index', 0, 'uint'],
                           ]
         }
@@ -44,7 +47,17 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
             NOTE: This function always gets called no matter with tap gets data. 
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {}
+        buffer = {
+            'MBX' : [],
+            'MBY' : [],
+            'MBZ' : [],
+            'time_STM_CLK' : [],
+            'time_RTC' : [],
+            'time_STM_CLK_UTC' : [],
+            'time_RTC_UTC' : [],
+            'received_at' : [],
+            'granule_index' : [],
+        }
 
         # self.__logger.send_log(f"data: {data}")
 
@@ -75,11 +88,13 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
                         converted = converted/self.__TAMGain
                         buffer[key].append(converted)
 
-                case 'time_STM_CLK':
-                    buffer[key] = data[key]
-                case 'time_RTC':
-                    buffer[key] = data[key]
-                case 'granule_index':
+                # case 'time_STM_CLK':
+                #     buffer[key] = data[key]
+                # case 'time_RTC':
+                #     buffer[key] = data[key]
+                # case 'granule_index':
+                #     buffer[key] = data[key]
+                case _ :
                     buffer[key] = data[key]
 
 
