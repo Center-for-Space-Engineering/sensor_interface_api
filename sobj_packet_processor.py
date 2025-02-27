@@ -135,7 +135,7 @@ class sobj_packet_processor(sensor_parent):
                             if self.__colms_list[i][2] == 'int' and temp[0] == 1:
                                 while len(temp) < 32:
                                     temp.insert(0,1)
-                                self.__buffer[self.__colms_list[i][0]][j] = int.from_bytes(temp, byteorder=sys.byteorder,signed = True)
+                                self.__buffer[self.__colms_list[i][0]][j] = int.from_bytes(temp, signed = True)
                             else:
                                 self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
                         cur_position_bits += self.__unpacking_map[i]
