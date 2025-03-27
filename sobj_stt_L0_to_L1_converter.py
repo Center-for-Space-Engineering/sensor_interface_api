@@ -50,7 +50,7 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                           ['4ADCT', 0, 'float'],
                           ['PAC', 0, 'uint'],
                           ['PHFC', 0, 'uint'],
-                          ['PCFR', 0, 'uint'],
+                        #   ['PCFR', 0, 'uint'],
                           ['VERS', 0, 'uint'],
                           ['MODE1', 0, 'uint'],
                           ['MODE2', 0, 'uint'],
@@ -64,8 +64,15 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                           ['TBD11', 0, 'uint'],
                           ['time_STM_CLK', 0, 'uint'],
                           ['time_RTC', 0, 'uint'],
-                          ['packet_count', 0, 'uint'], 
+                          ['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"],
+                          ['time_RTC_UTC', 0, 'mysql_milli_datetime', "secondary_index"],
+                          ['packet_count', 0, 'uint'],
+                          ['PPS_UTC', 0, 'mysql_micro_datetime'],
+                          ['PPSR_EPOCH', 0, 'mysql_milli_datetime'],
+                          ['PPSS_EPOCH', 0, 'mysql_micro_datetime'],
+                          ['received_at', 0, 'uint', "nullable"],
                           ['granule_index', 0, 'uint'],
+                          ['PCFC', 0, 'uint']
                           ]
         }
 
@@ -89,7 +96,60 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
         # # sensor_parent.save_data(self, table='STT_L1', data=data)
         # self.__logger.send_log(f"data: {data}\n")
         # # return
-        # buffer = {}
+        # buffer = {
+        #     'PPSW' : [],
+        #     'PPSM' : [],
+        #     'PPSS' : [],
+        #     'PPSR' : [],
+        #     '0ADC0' : [],
+        #     '0ADC1' : [],
+        #     '0ADC2' : [],
+        #     '0ADC3' : [],
+        #     '0ADCT' : [],
+        #     '1ADC0' : [],
+        #     '1ADC1' : [],
+        #     '1ADC2' : [],
+        #     '1ADC3' : [],
+        #     '1ADCT' : [],
+        #     '2ADC0' : [],
+        #     '2ADC1' : [],
+        #     '2ADC2' : [],
+        #     '2ADC3' : [],
+        #     '2ADCT' : [],
+        #     '3ADC0' : [],
+        #     '3ADC1' : [],
+        #     '3ADC2' : [],
+        #     '3ADC3' : [],
+        #     '3ADCT' : [],
+        #     '4ADC1' : [],
+        #     '4ADC2' : [],
+        #     '4ADCT' : [],
+        #     'PAC' : [],
+        #     'PHFC' : [],
+        #     # 'PCFR' : [],
+        #     'VERS' : [],
+        #     'MODE1' : [],
+        #     'MODE2' : [],
+        #     'CAL' : [],
+        #     'GPS_C' : [],
+        #     'DEBUG' : [],
+        #     'TBD7' : [],
+        #     'TBD8' : [],
+        #     'TBD9' : [],
+        #     'TBD10' : [],
+        #     'TBD11' : [],
+        #     'time_STM_CLK' : [],
+        #     'time_RTC' : [],
+        #     'time_STM_CLK_UTC' : [],
+        #     'time_RTC_UTC' : [],
+        #     'packet_count' : [],
+        #     'PPS_UTC' : [],
+        #     'PPSR_EPOCH' : [],
+        #     'PPSS_EPOCH' : [],
+        #     'received_at' : [],
+        #     'granule_index' : [],
+        #     'PCFC' : [],
+        # }
         # for key in data:
         #     match key:
         #         case '0ADC0':
@@ -139,10 +199,10 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
         #         case '4ADCT':
         #             buffer[key] = [(data[key][0] >> 2) * 0.03125]
         #         case 'packet_count':
-        #             buffer[key] = [data[key][0]]
+        #             buffer[key] = data[key]
         #         case _:
-        #             buffer[key] = [data[key][0]]
-        # # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
+        #             buffer[key] = data[key]
+        # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
         # # return
         # buf_copy = copy.deepcopy(buffer)
         # self.__logger.send_log(f"buffer: {buffer}\n\n")
