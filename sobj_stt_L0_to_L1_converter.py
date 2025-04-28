@@ -198,10 +198,8 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                     buffer[key] = [(data[key][0] * self.__LSB) / (100/274)]
                 case '4ADCT':
                     buffer[key] = [(data[key][0] >> 2) * 0.03125]
-                case 'packet_count':
-                    buffer[key] = data[key]
                 case _:
-                    buffer[key] = data[key]
+                    buffer[key] = [data[key]]
         self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
         # return
         buf_copy = copy.deepcopy(buffer)
