@@ -31,7 +31,7 @@ class sobj_packet_detect(sensor_parent):
         self.__telemetry_packet_types_lock = threading.Lock() 
 
 
-        self.__apids = sensor_config.vaild_apids[self.__data_group]
+        self.__apids = sensor_config.valid_apids[self.__data_group]
         self.__apids_lock = threading.Lock()
 
         self.__start_time = datetime.now()
@@ -56,9 +56,9 @@ class sobj_packet_detect(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=coms, config= self.__config, name=self.__name, max_data_points=00, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
-    def is_vaild_apid(self, apid, apids):
+    def is_valid_apid(self, apid, apids):
         '''
-            check apid agaist list of vaild apids
+            check apid agaist list of valid apids
         '''
         return apid in apids
     def get_packet_info(self, apid):
@@ -121,8 +121,8 @@ class sobj_packet_detect(sensor_parent):
             APID = int.from_bytes(packet[:2], 'big') & 0x07ff
             apid_str = f"{APID:03X}"
 
-            #vaildation check
-            if not self.is_vaild_apid(apid_str, apids):
+            #validation check
+            if not self.is_valid_apid(apid_str, apids):
                 self.__unknown_apid_count += 1
             else : 
                 #sort packets into their corrisponding list
