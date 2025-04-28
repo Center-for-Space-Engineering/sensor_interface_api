@@ -34,6 +34,7 @@ class sobj_packet_processor(sensor_parent):
         if self.__name in sensor_config.time_correlation:
             self.__colms_list.append(['PPS_UTC', 0, 'mysql_micro_datetime'])
             self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime'])
+            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime'])
             self.__colms_list.append(['PPSR_EPOCH', 0, 'mysql_milli_datetime'])
         self.__colms_list.append(['time_STM_CLK', 0, 'bigint'])
         self.__colms_list.append(['time_RTC', 0, 'uint'])
@@ -43,6 +44,14 @@ class sobj_packet_processor(sensor_parent):
         self.__colms_list.append(['packet_count', 0, 'uint'])
         self.__colms_list.append(['granule_index', 0, 'uint'])
         self.__unpacking_map = [0  for _ in range(self.__packet_config['Channels'])]
+
+        # Get length of PPSW and PPSM in bytes
+        if self.__name in sensor_config.time_correlation:
+            sensor_config.PPSS_len = int(self.__packet_config["granule definition"]["PPSS"]["Word Length (bits)"] / 8)
+            sensor_config.PPSR_len = int(self.__packet_config["granule definition"]["PPSR"]["Word Length (bits)"] / 8)
+            
+            sensor_config.PPSW_len = int(self.__packet_config["granule definition"]["PPSW"]["Word Length (bits)"] / 8)
+            sensor_config.PPSM_len = int(self.__packet_config["granule definition"]["PPSM"]["Word Length (bits)"] / 8)
 
         # Get length of PPSW and PPSM in bytes
         if self.__name in sensor_config.time_correlation:
