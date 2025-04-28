@@ -18,30 +18,30 @@ class sensor_importer():
         self.__packet_processor_name = packet_processor_name
         self.__detector_list = detector_list
         self.__processor_list = processor_list
-        self.__packets_struter = {}
+        self.__packets_structure = {}
         self.__source_list = {}
 
         for file_path in self.__packets_file_paths_list:
             # NOTE: we are going to use the file name to track our data
             
-            #get the packet struture
+            #get the packet structure
             telemetry_packet_types = []
             count = 0
 
             with open(file_path, 'r') as file:
                 try:
                     # Load the YAML content
-                    temp_structur = yaml.safe_load(file)
-                    self.__packets_struter.update(temp_structur)
-                    self.__source_list[file_path] = list(temp_structur.keys())
+                    temp_structure = yaml.safe_load(file)
+                    self.__packets_structure.update(temp_structure)
+                    self.__source_list[file_path] = list(temp_structure.keys())
                 except yaml.YAMLError as exc:
                     print(f"Error reading YAML file: {exc}")
             
                 #save all the Mnemonic, and APIDS we know about
-                system_constants.vaild_apids[file_path] = list(temp_structur.keys())
+                system_constants.valid_apids[file_path] = list(temp_structure.keys())
                 
-                for packet in temp_structur:
-                    telemetry_packet_types.append((temp_structur[packet]['Mnemonic'], packet, count)) # Mnemonic, APID, possition in a list
+                for packet in temp_structure:
+                    telemetry_packet_types.append((temp_structure[packet]['Mnemonic'], packet, count)) # Mnemonic, APID, possition in a list
                     count += 1
             system_constants.telemetry_packet_types[file_path] = telemetry_packet_types
             system_constants.telemetry_packet_num[file_path] = count
@@ -72,7 +72,7 @@ class sensor_importer():
                 for process in self.__processor_list:
                     for apid in self.__source_list[process[1]]:
                         sensor_class = getattr(module, class_name)
-                        sensor_object = sensor_class(coms, process[0], self.__packets_struter[apid], apid)
+                        sensor_object = sensor_class(coms, process[0], self.__packets_structure[apid], apid)
                         self.__sensors.append(sensor_object)
             else : 
                 sensor_class = getattr(module, class_name)
