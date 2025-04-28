@@ -1,0 +1,25 @@
+'040':
+  Active: 1
+  Channels: 38
+  Delay: 50.0
+  G. Rate: 2000.0
+  G. Size bytes: 66
+  Granule count: 1
+  Mnemonic: STTA
+  PKT Period: 50.0
+  PKT Size bytes: 81
+  Packet: 0
+  Rate (Bits/s): 12.96
+  granule definition:
+    1ADC0:
+      Order: 5
+      Packet: 0
+      Rate: 2000.0
+      Signed: true
+      Word Length (bits): 16
+    1ADC1:
+      Order: 6
+      Packet: 0
+      Rate: 2000.0
+      Signed: true
+      Word Length (bits): 16
