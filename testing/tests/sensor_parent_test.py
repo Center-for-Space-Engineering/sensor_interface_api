@@ -14,10 +14,10 @@ from sensor_interface_api.sensor_parent import sensor_parent
 from sensor_interface_api.sobj_gps_board_aux import sobj_gps_board_aux
 from logging_system_display_python_api.messageHandler import messageHandler
 
-# @pytest.mark.sensor_parent_tests
-# def test_init():
-#     #this looks incredibly awful so I might skip this for now
-#     pass
+@pytest.mark.sensor_parent_tests
+def test_init():
+    #this looks incredibly awful so I might skip this for now
+    pass
 
 @pytest.mark.sensor_parent_tests
 def test_set_up_taps():

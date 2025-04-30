@@ -35,7 +35,6 @@ def test_success_importing_yaml():
 @pytest.mark.collect_sensor_tests
 @mock.patch('sys.stdout', new_callable=StringIO)
 def test_fail_importing_yaml(mock_stdout):
-  
     # do more with except, idk what tho
     try:
         file_path = "sensor_interface_api/testing/sensor_test/bad_collect_sensor_test.yaml"
