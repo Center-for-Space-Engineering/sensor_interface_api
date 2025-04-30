@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import system_constants as sensor_config
 from logging_system_display_python_api.messageHandler import messageHandler
 from sensor_interface_api.collect_sensor import sensor_importer
+from threading_python_api.taskHandler import taskHandler
 
 @pytest.mark.collect_sensor_tests
 #Test for successfully reading a yaml file
@@ -44,65 +45,96 @@ def test_fail_importing_yaml(mock_stdout):
         assert "Error reading YAML file" in output
     except UnboundLocalError:
         pass
-         
-
-# What are we testing for?
-#   all correct files get added to list
-#       TODO
-#   all files in list are correct
-#       check if all files are in subdirectory
-#       check if all files in list have sobj and .py
 
 @pytest.mark.collect_sensor_tests
 def test_import_modules():
     test_sensor = sensor_importer([], [], [], '')
     test_sensor.import_modules()
 
+    # get list of all modules that should have be imported
     current_dir = os.path.dirname("sensor_interface_api/collect_sensor.py")
     file_list = os.listdir(current_dir)
-
+    sobj_list = []
     for file in file_list:
-        file_list[file_list.index(file)] = "sensor_interface_api." + file.strip('.py')
-
+        if 'sobj_' in file:
+            sobj_list.append("sensor_interface_api." + file.strip('.py'))
+    # get list of the names of all modules that were imported
+    module_names = []
     for module in test_sensor._sensor_importer__sensors_class:
-        assert module.__name__ in file_list
-        assert "sobj_" in module.__name__
+        module_names.append(module.__name__)
 
-# What to test for:
-#   class name == module name?
-#   packet detect
-#       ensure a sensor object is added for every detector
-#   packet processor
-#       ensure a sensor object is added for every apid for every process
-#   generic sensor
-#       ensure an object is added for a generic sensor
+    # every module that was imported should have been imported (no extras modules)
+    for module in module_names:
+        assert module in sobj_list
+        assert "sobj_" in module
+    # every module that should have been imported was imported (no missing modules)
+    for file in sobj_list:
+        assert file in module_names
+
 @pytest.mark.collect_sensor_tests
-def test_instantiate_sensor_objects():
+def test_instantiate_sensor_objects():    
+    # set up for importing sensors
     coms = messageHandler(destination='Local')
-
-    sobj_directory = os.path.dirname("sensor_interface_api/collect_sensor.py")
-    sensor_class_list = os.listdir(sobj_directory)
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
     with open("main.yaml", "r") as file:
         config_data = yaml.safe_load(file)
     sensor_config_dict = config_data.get("sensor_config_dict", {})
     sensor_config.sensors_config = sensor_config_dict
+    test_detector_list = []
+    test_processor_list = []
+    test_packet_file_list = []
+    packet_list = []
+    for sensor in sensor_config_dict:
+        if 'detect' in sensor:
+            test_packet_file_list.append(sensor_config_dict[sensor]['packet_sturture'])
+            test_detector_list.append(sensor)
+        else:
+            if 'parser' in sensor:
+                test_processor_list.append((sensor, sensor_config_dict[sensor]['source']))
 
-
-    test_sensor = sensor_importer([], [], [], 'sobj_packet_processor')
+    # create test sensor and instantiate sensors
+    test_sensor = sensor_importer(packets_file_list=test_packet_file_list, detector_list=test_detector_list, processor_list=test_processor_list, packet_processor_name='sobj_packet_processor')
     test_sensor.import_modules()
-    test_sensor.instantiate_sensor_objects(coms)    #need coms here
+    test_sensor.instantiate_sensor_objects(coms)
+
+    # get names of the sensors that *were* created
     sensor_obj_list = test_sensor.get_sensors()
-    # maybe test getter here
+    sensor_obj_names = []
     for sensor in sensor_obj_list:
-        print("hello")
+        sensor_obj_names.append(sensor.get_sensor_name())
 
-    for sensor in sensor_class_list:
-        if ('sobj_' in sensor):
-            if ('detect' in sensor):
-                pass
-            elif ('sobj_packet_processor' in sensor):
-                pass
-            else:
-                assert sensor.strip('.py') in sensor_obj_list
+    # get names of all sensors that *should be* created
+    desired_sensors = []
+    for detector in test_detector_list:
+        desired_sensors.append(detector)
 
-# get_sensors is prob going to be tested above
+    keys = []
+    for processor in test_processor_list:
+        packet_dict = yaml.safe_load(open(processor[1], 'r'))
+        keys = packet_dict.keys()
+        for key in keys:
+            desired_sensors.append(packet_dict[key]['Mnemonic'] + sensor_config.sensors_config[processor[0]]['extention'])
+
+    sobj_directory = os.path.dirname("sensor_interface_api/collect_sensor.py")
+    temp_list = os.listdir(sobj_directory)
+    for file in temp_list:
+        if 'sobj' in file and 'detect' not in file and 'processor' not in file:
+            desired_sensors.append(file.removeprefix('sobj_').removesuffix('.py'))
+
+    # assert that all sensors that should have been created were created (no missing sensors)
+    desired_sensors.append('evil')
+    for sensor in desired_sensors:
+        if sensor == 'evil':
+            assert sensor not in sensor_obj_names
+        else:
+            assert sensor in sensor_obj_names
+    
+    # assert that all sensors that were created should have been created (no extra sensors, also tests get_sensors)
+    desired_sensors.remove('evil')
+    sensor_obj_names.append('evil')
+    for sensor in sensor_obj_names:
+        if sensor == 'evil':
+            assert sensor not in desired_sensors
+        else:
+            assert sensor in desired_sensors
