@@ -19,7 +19,6 @@ from logging_system_display_python_api.messageHandler import messageHandler
 #     #this looks incredibly awful so I might skip this for now
 #     pass
 
-# check tap_requests list or sm shit
 @pytest.mark.sensor_parent_tests
 def test_set_up_taps():
     #test for one tap, passive_active == 'active'
