@@ -169,7 +169,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__status
             self.__status_lock.release()
         else : 
-            raise RuntimeError("Could not aquire status lock")
+            raise RuntimeError("Could not acquire status lock")
         return temp
     def set_sensor_status(self, status):
         '''
@@ -186,7 +186,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 raise RuntimeError(f"{status} is not a valid status.")
             self.__status_lock.release()
         else :
-            raise RuntimeError("Could not aquire status lock")
+            raise RuntimeError("Could not acquire status lock")
     def set_thread_status(self, status):
         '''
             This function is for setting the threading status AKA your processing threads that get started. USE 'Running', 'Complete' or 'Error'.
