@@ -70,12 +70,14 @@ def test_import_modules():
     for file in sobj_list:
         assert file in module_names
 
+# Should I change this here???
 @pytest.mark.collect_sensor_tests
-def test_instantiate_sensor_objects():    
+def test_instantiate_sensor_objects_get_sensors():    
     # set up for importing sensors
     coms = messageHandler(destination='Local')
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
+
     with open("main.yaml", "r") as file:
         config_data = yaml.safe_load(file)
     sensor_config_dict = config_data.get("sensor_config_dict", {})
@@ -83,7 +85,6 @@ def test_instantiate_sensor_objects():
     test_detector_list = []
     test_processor_list = []
     test_packet_file_list = []
-    packet_list = []
     for sensor in sensor_config_dict:
         if 'detect' in sensor:
             test_packet_file_list.append(sensor_config_dict[sensor]['packet_sturture'])
