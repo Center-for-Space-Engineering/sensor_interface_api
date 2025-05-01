@@ -183,6 +183,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             elif status == 'Not running':
                 self.__status = status
             else :
+                self.__status_lock.release()
                 raise RuntimeError(f"{status} is not a valid status.")
             self.__status_lock.release()
         else :
