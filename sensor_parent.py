@@ -161,7 +161,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else : 
             raise RuntimeError("Could not acquire html lock")
         return temp_token
-    def get__sensor_status(self):
+    def get_sensor_status(self):
         '''
             Returns the status of the sensor, it is up to the user to set this status, this function returns that status to the server. 
         '''
@@ -176,11 +176,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             User calls this function to set a status, must be Running, Error, Not running.
         '''
         if self.__status_lock.acquire(timeout=1): # pylint: disable=R1732
-            if status == 'Running':
+            if status.lower() =='running':
                 self.__status = status
-            elif status == 'Error':
+            elif status.lower() == 'error':
                 self.__status = status
-            elif status == 'Not running':
+            elif status.lower() == 'not running':
                 self.__status = status
             else :
                 self.__status_lock.release()
