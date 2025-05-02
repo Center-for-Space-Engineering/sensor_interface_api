@@ -28,7 +28,7 @@ def test_init():
 @pytest.mark.sensor_parent_tests
 def test_set_up_taps():
     #test for one tap, passive_active == 'active'
-    test_sensor = sensor_parent(coms=None, config={'tap_request': ['a'], 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 0}, name='tap_test_1')
+    test_sensor = sensor_parent(coms=None, config={'tap_request': ['a'], 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='tap_test_1')
     test_sensor.make_data_tap = MagicMock()
     test_sensor.start_publisher = MagicMock()
     test_sensor.set_up_taps()
@@ -39,7 +39,7 @@ def test_set_up_taps():
     test_sensor.start_publisher.assert_called_with
 
     #test for multiple taps, passive_active == 'passive'
-    test_sensor = sensor_parent(coms=None, config={'tap_request': ['a', 'b', 'c'], 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 0}, name='tap_test_2')
+    test_sensor = sensor_parent(coms=None, config={'tap_request': ['a', 'b', 'c'], 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='tap_test_2')
     test_sensor.make_data_tap = MagicMock()
     test_sensor.start_publisher = MagicMock()
     test_sensor.set_up_taps()
@@ -50,7 +50,7 @@ def test_set_up_taps():
     test_sensor.start_publisher.assert_not_called
 
     #test for tap_request, publisher, and passive_active == None
-    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'passive_active': None, 'interval_pub': 0}, name='tap_test_3')
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'passive_active': None, 'interval_pub': 'NA'}, name='tap_test_3')
     test_sensor.make_data_tap = MagicMock()
     test_sensor.start_publisher = MagicMock()
     test_sensor.set_up_taps()
@@ -60,7 +60,7 @@ def test_set_up_taps():
     test_sensor.start_publisher.assert_not_called
     
     #test for publisher == 'no'
-    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 0}, name='tap_test_4')
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='tap_test_4')
     test_sensor.set_up_taps()
     test_sensor.start_publisher = MagicMock()
 
@@ -120,7 +120,6 @@ def test_get_set_sensor_status():
         with pytest.raises(RuntimeError) as excinfo:
             test_sensor.set_sensor_status('Running')
         
-        print('here')
         test_sensor._sensor_parent__status_lock.release()
         assert 'Could not acquire status lock' in str(excinfo.value)
         assert test_sensor._sensor_parent__status_lock.locked() == False
@@ -147,7 +146,6 @@ def test_set_thread_status():
         test_sensor.set_thread_status(status)
         assert threadWrapper.get_status(test_sensor) == status
 
-#TODO: possibly figure out how to change data_buffer_overwrite not manually
 @pytest.mark.sensor_parent_tests
 def test_ready_for_data():
     test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='test_data_ready')
@@ -163,39 +161,134 @@ def test_process_data():
         test_sensor.process_data(None)
     assert "process_data Not implemented, should process that last data received (data is stored in the __data_received variable)." in str(excinfo.value)
 
+#TODO: maybe check this out and make sure I don't have to add a thread for the sensor
 @pytest.mark.sensor_parent_tests
 def test_get_data():
-    # create a tap
+    # set up tap
     coms = messageHandler(destination='Local')
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
-    sender = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='sender')
     receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': None, 'interval_pub': None}, name='receiver')
     receiver.set_up_taps()
     assert receiver.get_taps() == ['sender']
 
     # ensure data_buffer_overwrite is false (ready for data)
-    assert receiver.ready_for_data()
+    data_ready = False
+    while not data_ready:
+        data_ready = receiver.ready_for_data()
 
-    # sender.send_tap(data, 'receiver')
+    # send_tap() is what reciever is told to call by one of its taps when that tap gets data
+    data = [['this', 'is', 'some', 'good', 'data'], [1, 2, 3, 4, 5], ['data', 123]]
+    for data in data:
+        receiver.send_tap(data, 'sender')
+        assert receiver.get_data_received('sender') == data
 
-    # return val is the same as data received from the tap
-    # from threadHandler, if event (data received from ___) is true, then it calls the function
-    # in this case, that'll be process_data, which calls get_data_received in every sobj
-    # so that means I need to
-    #   1. have sender call send_tap (sends data over)
-    #   2. have receiver call... publish? something else? how does it know when data is received again??
+    receiver.send_tap([], 'sender')
+    # test for failure to acquire data_buffer_overwrite_lock
+    receiver._sensor_parent__data_buffer_overwrite_lock.acquire()
+    if receiver._sensor_parent__data_buffer_overwrite_lock.locked():
+        with pytest.raises(RuntimeError) as excinfo:
+            receiver.get_data_received('sender')
 
-    # steps for testing:
-    #
-    #   test for failing to acquire data_buffer_overwrite lock
-    #   test for failing to acquire data lock
+        receiver._sensor_parent__data_buffer_overwrite_lock.release()
+        assert 'Could not acquire data buffer overwrite lock.' in str(excinfo.value)
+        assert receiver._sensor_parent__data_buffer_overwrite_lock.locked() == False
+        assert receiver.get_data_received('sender') == ['data', 123]    #failure to acquire lock means it is unable to update data_copy to []
 
-    # potential issue- if we wanted to add more requests to a sensor (specifically looking at lip l0 to l1) it may not listen to all
-    # but I think this will be covered in the sensor specific tests so i'll just assume we good
+    # test for failure to acquire data_lock
+    receiver._sensor_parent__data_lock.acquire()
+    if receiver._sensor_parent__data_lock.locked():
+        with pytest.raises(RuntimeError) as excinfo:
+            receiver.get_data_received('sender')
+
+        receiver._sensor_parent__data_lock.release()
+        assert 'Could not acquire data lock' in str(excinfo.value)
+        assert receiver._sensor_parent__data_lock.locked() == False
+        assert receiver.get_data_received('sender') == ['data', 123]    #failure to acquire lock means it is unable to update data_copy to []
+
+#TODO: finish this (prob talk to Shawn or Justin and see if they know anything helpful)
+@pytest.mark.sensor_parent_tests
+def test_make_data_tap():
+    coms = messageHandler(destination='Local')
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+    source = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='source')
+    tapper = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='tapper')
+    thread_handler.add_thread(source.run, source.get_sensor_name(), source)
+    thread_handler.add_thread(tapper.run, tapper.get_sensor_name(), tapper)
+    # thread_handler.start()
+    source.create_tap = MagicMock()
+    
+    # For debugging purposes (only one should be uncommented at a time)
+    # messageHandler.send_request = MagicMock()
+    # taskHandler.pass_request = MagicMock()
+    # threadWrapper.make_request = MagicMock()
+
+    tapper.make_data_tap('source')
+
+    # For debugging purposes (only one should be uncommented at a time) (all of these asserts pass)
+    # messageHandler.send_request.assert_called()
+    # taskHandler.pass_request.assert_called()
+    # threadWrapper.make_request.assert_called_with('create_tap', args = [tapper.send_tap, 'tapper'])
+
+    # This is the actual assert we want to use, but it fails
+    # new problem occurs between threadWrapper.make_request being called and the function... being called
+    source.create_tap.assert_called()
+    
+    # May or may not be necessary, depending on if we start the thread_handler
+    # thread_handler.kill_tasks()
+
+    # Further testing:
+    #   failure to acquire lock
+
+#TODO
+@pytest.mark.sensor_parent_tests
+def test_send_tap():
+    #omfg I'm so done with taps please kill me
+    pass
+
+#get_taps is already tested
+
+#TODO
+@pytest.mark.sensor_parent_tests
+def test_create_tap():
+    #real talk, should I just put all the tap related stuff in one long ass test?
+    pass
 
 @pytest.mark.sensor_parent_tests
 def test_get_sensor_name():
     test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='Liz')
     assert test_sensor.get_sensor_name() == 'Liz'
+
+    # test for failure to acquire lock
+    test_sensor._sensor_parent__name_lock.acquire()
+    if (test_sensor._sensor_parent__name_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.get_sensor_name()
+        
+        assert "Could not acquire name lock" in str(excinfo.value)
+    test_sensor._sensor_parent__name_lock.release()
     
+@pytest.mark.sensor_parent_tests
+def test_start_publisher():
+    # to test:
+    #   request sent to coms, add_thread_request_func is called in task_handler
+    #   ok awesome, what if I killed myself (THIS IS A JOKE I just really don't want to deal with coms again)
+    #   failure to acquire lock
+    coms = messageHandler(destination='Local')
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['a'], 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='publisher_test')
+    #is this necessary??
+    # thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    thread_handler.add_thread = MagicMock()
+    thread_handler.add_thread_request_func = MagicMock()
+    # thread_handler.pass_request = MagicMock()
+    # coms.send_request = MagicMock()
+    test_sensor.start_publisher()
+
+    # This is what I expect to be called, but it seems it isn't
+    thread_handler.add_thread_request_func.assert_called_with(test_sensor.publish, 'publisher for publisher_test', test_sensor)
+
+    # This is what actually gets called
+    thread_handler.add_thread.assert_called
