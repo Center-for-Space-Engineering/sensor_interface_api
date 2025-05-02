@@ -303,7 +303,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__name
             self.__name_lock.release()
         else :
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         return temp
     def start_publisher(self):
         '''
