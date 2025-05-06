@@ -10,6 +10,7 @@ from unittest import mock
 from io import StringIO
 import threading
 from pytest import ExceptionInfo
+import time
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper
@@ -161,7 +162,6 @@ def test_process_data():
         test_sensor.process_data(None)
     assert "process_data Not implemented, should process that last data received (data is stored in the __data_received variable)." in str(excinfo.value)
 
-#TODO: maybe check this out and make sure I don't have to add a thread for the sensor
 @pytest.mark.sensor_parent_tests
 def test_get_data():
     # set up tap
@@ -183,8 +183,8 @@ def test_get_data():
         receiver.send_tap(data, 'sender')
         assert receiver.get_data_received('sender') == data
 
-    receiver.send_tap([], 'sender')
     # test for failure to acquire data_buffer_overwrite_lock
+    receiver.send_tap([], 'sender') # send new piece of data so we can test it later
     receiver._sensor_parent__data_buffer_overwrite_lock.acquire()
     if receiver._sensor_parent__data_buffer_overwrite_lock.locked():
         with pytest.raises(RuntimeError) as excinfo:
@@ -206,7 +206,6 @@ def test_get_data():
         assert receiver._sensor_parent__data_lock.locked() == False
         assert receiver.get_data_received('sender') == ['data', 123]    #failure to acquire lock means it is unable to update data_copy to []
 
-#TODO: finish this (prob talk to Shawn or Justin and see if they know anything helpful)
 @pytest.mark.sensor_parent_tests
 def test_make_data_tap():
     coms = messageHandler(destination='Local')
@@ -216,38 +215,86 @@ def test_make_data_tap():
     tapper = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='tapper')
     thread_handler.add_thread(source.run, source.get_sensor_name(), source)
     thread_handler.add_thread(tapper.run, tapper.get_sensor_name(), tapper)
-    # thread_handler.start()
-    source.create_tap = MagicMock()
-    
-    # For debugging purposes (only one should be uncommented at a time)
-    # messageHandler.send_request = MagicMock()
-    # taskHandler.pass_request = MagicMock()
-    # threadWrapper.make_request = MagicMock()
+    thread_handler.start()
 
     tapper.make_data_tap('source')
 
-    # For debugging purposes (only one should be uncommented at a time) (all of these asserts pass)
-    # messageHandler.send_request.assert_called()
-    # taskHandler.pass_request.assert_called()
-    # threadWrapper.make_request.assert_called_with('create_tap', args = [tapper.send_tap, 'tapper'])
+    while thread_handler.check_request('source', 1) is False:
+        pass
+    try:
+        assert 'tapper' in source._sensor_parent__tap_subscribers
+    finally:
+        thread_handler.kill_tasks()
 
-    # This is the actual assert we want to use, but it fails
-    # new problem occurs between threadWrapper.make_request being called and the function... being called
-    source.create_tap.assert_called()
-    
-    # May or may not be necessary, depending on if we start the thread_handler
-    # thread_handler.kill_tasks()
+    # test for failure to acquire name_lock
+    tapper._sensor_parent__name_lock.acquire()
+    # mock send_request to make sure it isn't called
+    coms.send_request = MagicMock()
+    if tapper._sensor_parent__name_lock.locked():
+        with pytest.raises(RuntimeError) as excinfo:
+            tapper.make_data_tap('source')
 
-    # Further testing:
-    #   failure to acquire lock
+        tapper._sensor_parent__name_lock.release()
+        assert 'Could not acquire name lock' in str(excinfo.value)
+        assert tapper._sensor_parent__name_lock.locked() == False
+        coms.send_request.assert_not_called()
 
 #TODO
 @pytest.mark.sensor_parent_tests
 def test_send_tap():
-    #omfg I'm so done with taps please kill me
-    pass
+    #things to test:
+    #   no data
+    #   some data
+    #   sender is in taps list
+    #   sender is not in taps list?
+    coms = messageHandler(destination='Local')
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
 
-#get_taps is already tested
+    with open("main.yaml", "r") as file:
+        config_data = yaml.safe_load(file)
+    sensor_config_dict = config_data.get("sensor_config_dict", {})
+    sensor_config.sensors_config = sensor_config_dict
+
+    temp = None
+    def process_data(*args, **kwargs):
+        temp = args[0]
+
+    sensor_parent.process_data = MagicMock(side_effect=process_data)
+    # test_sensor = sobj_gps_board_aux(coms=coms)
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Justin')
+    test_sensor.process_data = MagicMock(side_effect=process_data)
+    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    thread_handler.start()
+
+    try:
+        test_sensor.send_tap(data=[1, 2, 3], sender='source')
+        print(f"{temp=}")
+        assert test_sensor._sensor_parent__data_buffer_overwrite == False
+        # assert that return val is something or other
+        # assert data in data_received list
+        # threadWrapper.set_event.assert_called()
+        assert test_sensor._sensor_parent__data_buffer_overwrite_lock.locked() == False
+        
+        # test_sensor.send_tap(data=[1, 2, 3], sender = 'sender')
+        # assert test_sensor._sensor_parent__data_buffer_overwrite == True
+        # assert test_sensor._sensor_parent__data_buffer_overwrite_lock.locked() == False
+        
+        #   not_ready_bool is equal to data_buffer_overwrite (DO WE NEED TO TEST THIS? NOT_READY IS AN INTERNAL SIGNAL)
+        #   lock is released
+        #   not quite sure how to test while loops
+
+        #   ensure event is set, meaning process data gets called
+        #   lock is released
+
+        #   failure to acquire data_buffer_overwrite_lock - I'm probably going to want to make a few threads to try and test the different places
+        #   in which it can fail
+
+    finally:
+        thread_handler.kill_tasks()
+        
+
+#get_taps is already tested (is it though lmao)
 
 #TODO
 @pytest.mark.sensor_parent_tests
