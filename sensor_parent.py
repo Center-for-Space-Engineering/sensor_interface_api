@@ -55,6 +55,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
     def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '', data_overwrite_exception:bool = True) -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
+        self.__logger = loggerCustom("logs/sensor_parent.txt")
         self.__coms = coms
         self.__status_lock = threading.Lock()
         self.__status = "Not Running"
@@ -77,11 +78,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__data_buffer_overwrite_lock = threading.Lock()
         self.__data_overwrite_exception = data_overwrite_exception
         #check to make sure the name is a valid name
-        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
+        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the pattern for valid file names. 
         if bool(re.match(pattern, name)):
             self.__name = name
         else :
-            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
+            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the standard file format. Please change the name.')
         # self.__logger = loggerCustom(f"logs/sensor_parent_{self.__name}.txt")
         self.__events = events_dict
         self.__active = False
@@ -203,6 +204,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
             thread. If you have large amounts of processing have this function create another thread and process the data on that. 
         '''
+        self.__logger.send_log('here')
         raise NotImplementedError("process_data Not implemented, should process that last data received (data is stored in the __data_received variable).")
     def get_data_received(self, tap_name):
         '''
@@ -230,7 +232,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else :
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request(name_of_class_to_make_tap, ['create_tap', self.send_tap, temp_name_token])
     def send_tap(self, data, sender):
         '''
@@ -313,7 +315,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else : 
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
     def publish(self): # pylint: disable=R0915
         '''
