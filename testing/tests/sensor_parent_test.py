@@ -19,11 +19,48 @@ import system_constants as sensor_config
 from sensor_interface_api.sensor_parent import sensor_parent
 from sensor_interface_api.sobj_gps_board_aux import sobj_gps_board_aux
 from logging_system_display_python_api.messageHandler import messageHandler
+from database_python_api.database_control import DataBaseHandler
 
 @pytest.mark.sensor_parent_tests
 def test_init():
-    #this looks incredibly awful so I might skip this for now
-    pass
+    # naming: valid names accepted, invalid names rejected
+    DataBaseHandler.create_table_external = MagicMock()
+
+    with pytest.raises(RuntimeError) as excinfo:
+        test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad\0')
+    assert "The name bad\0, is not a valid sensor name" in str(excinfo.value)
+    
+    with pytest.raises(RuntimeError) as excinfo:
+        test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad/')
+    assert "The name bad/, is not a valid sensor name" in str(excinfo.value)
+
+    coms = messageHandler()
+    dataBase = DataBaseHandler(coms, db_name='dataBase')
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+
+    coms.send_request = MagicMock()
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='good', db_name='dataBase', table_structure={'name': ['row', 0, 'int']})
+    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    thread_handler.start()
+
+    assert test_sensor.get_sensor_name() == 'good'
+    
+    # database tables set up correctly
+    #TODO: database has no tables. Check for make_table_external getting all the right args, check for make_table_external being called
+    try:
+        coms.send_request.assert_called_with('dataBase', ['create_table_external', {'name': ['row', 0, 'int']}])
+
+        print(f"{dataBase._DataBaseHandler__tables=}")
+        assert 'good' in dataBase.get_tables_html()
+    finally:
+        thread_handler.kill_tasks()
+
+    # html graphs set up correctly
+    # events set up correctly
+    # threaWrapper stuff set up correctly
+    # html page generation stuff set up correctly
+    # everything else is initialized properly???
 
 #TODO: maybe also test get and create tap funcs here?
 @pytest.mark.sensor_parent_tests
@@ -319,23 +356,31 @@ def test_get_sensor_name():
 @pytest.mark.sensor_parent_tests
 def test_start_publisher():
     # to test:
-    #   request sent to coms, add_thread_request_func is called in task_handler
-    #   ok awesome, what if I killed myself (THIS IS A JOKE I just really don't want to deal with coms again)
     #   failure to acquire lock
     coms = messageHandler(destination='Local')
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
     test_sensor = sensor_parent(coms=coms, config={'tap_request': ['a'], 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='publisher_test')
-    #is this necessary??
-    # thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-    thread_handler.add_thread = MagicMock()
-    thread_handler.add_thread_request_func = MagicMock()
-    # thread_handler.pass_request = MagicMock()
-    # coms.send_request = MagicMock()
+
+    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    thread_handler.start()
     test_sensor.start_publisher()
 
-    # This is what I expect to be called, but it seems it isn't
-    thread_handler.add_thread_request_func.assert_called_with(test_sensor.publish, 'publisher for publisher_test', test_sensor)
+    assert 'publisher for publisher_test' in thread_handler._taskHandler__threads
 
-    # This is what actually gets called
-    thread_handler.add_thread.assert_called
+    # test for failure to acquire lock
+    test_sensor._sensor_parent__name_lock.acquire()
+    if (test_sensor._sensor_parent__name_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.start_publisher()
+        
+        assert "Could not acquire name lock" in str(excinfo.value)
+    test_sensor._sensor_parent__name_lock.release()
+
+    thread_handler.kill_tasks()
+
+#TODO
+@pytest.mark.sensor_parent_tests
+def test_publish():
+    #wow this is very big and very long. maybe I'll go work on that init test lol
+    pass
