@@ -102,7 +102,7 @@ class sobj_packet_processor(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
-        self.__logger.send_log(f"Setup complete{self.__packet_nmemonic}")
+        # self.__logger.send_log(f"Setup complete{self.__packet_nmemonic}")
     def process_data(self, _):
         '''
             This function gets called when one of the tap request gets any data. 
@@ -135,7 +135,7 @@ class sobj_packet_processor(sensor_parent):
 
                         gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2]) # Value is dubious
                         gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+4])
-                        self.__logger.send_log(f"{gps_week=}\t{gps_milli=}")
+                        # self.__logger.send_log(f"{gps_week=}\t{gps_milli=}")
 
                         if gps_week != 0 and gps_milli != 0:
                             leap_seconds = 18
@@ -169,7 +169,7 @@ class sobj_packet_processor(sensor_parent):
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
                         if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
                             self.__buffer[self.__colms_list[i][0]][j] = 0
-                            self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
+                            # self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
                         else :
                             if self.__colms_list[i][2] == 'int' and temp[0] == 1:
                                 while len(temp) < 32:

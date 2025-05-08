@@ -90,7 +90,7 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
         '''
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
         # sensor_parent.save_data(self, table='STT_L1', data=data)
-        self.__logger.send_log(f"data: {data}\n")
+        # self.__logger.send_log(f"data: {data}\n")
         # return
         buffer = {
             'PPSW' : [],
@@ -190,6 +190,6 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
         # self.__logger.send_log(f"buffer: {buffer}\ntable: {self.__table_structure}\n\n")
         # return
         buf_copy = copy.deepcopy(buffer)
-        self.__logger.send_log(f"buffer: {buffer}\n\n")
+        # self.__logger.send_log(f"buffer: {buffer}\n\n")
         sensor_parent.save_data(self, table='STTA_L1', data=buf_copy)
         pass

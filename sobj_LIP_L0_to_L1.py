@@ -73,7 +73,7 @@ class sobj_LIP_L0_to_L1(sensor_parent):
 
         }
 
-        self.__logger.send_log(f"data: {type(data)}")
+        # self.__logger.send_log(f"data: {type(data)}")
 
         for key in data:
             # self.__logger.send_log(f"key: {key}")
@@ -129,6 +129,6 @@ class sobj_LIP_L0_to_L1(sensor_parent):
         # buffer['Mag'] = [math.floor(x[0] / (2**10)) for x in zip(buffer['IQS'])]
         # buffer['Phase'] = [x[0] - (math.floor(x[0] / (2**10)) * 2**10) for x in zip(buffer['IQS'])]
 
-        self.__logger.send_log(str(buffer))
+        # self.__logger.send_log(str(buffer))
 
         sensor_parent.save_data(self, table = 'LIP_L1', data = buffer)

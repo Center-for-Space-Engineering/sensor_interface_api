@@ -70,7 +70,7 @@ class sobj_QIP_L0_to_L1(sensor_parent):
             'granule_index' : [],
         }
 
-        self.__logger.send_log(f"data: {type(data)}")
+        # self.__logger.send_log(f"data: {type(data)}")
 
         for key in data:
             # self.__logger.send_log(f"key: {key}")
