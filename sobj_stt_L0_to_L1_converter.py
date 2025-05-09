@@ -67,9 +67,9 @@ class sobj_stt_L0_to_L1_converter(sensor_parent):
                           ['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"],
                           ['time_RTC_UTC', 0, 'mysql_milli_datetime', "secondary_index"],
                           ['packet_count', 0, 'uint'],
-                          ['PPS_UTC', 0, 'mysql_micro_datetime'],
-                          ['PPSR_EPOCH', 0, 'mysql_milli_datetime'],
-                          ['PPSS_EPOCH', 0, 'mysql_micro_datetime'],
+                          ['PPS_UTC', 0, 'mysql_micro_datetime', 'nullable'],
+                          ['PPSR_EPOCH', 0, 'mysql_milli_datetime', 'nullable'],
+                          ['PPSS_EPOCH', 0, 'mysql_micro_datetime', 'nullable'],
                           ['received_at', 0, 'uint', "nullable"],
                           ['granule_index', 0, 'uint'],
                           ['PCFC', 0, 'uint']

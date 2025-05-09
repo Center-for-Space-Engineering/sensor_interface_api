@@ -32,10 +32,10 @@ class sobj_packet_processor(sensor_parent):
 
         self.__colms_list = [['temp', 0, 'uint'] for _ in range(self.__packet_config['Channels'])]
         if self.__name in sensor_config.time_correlation:
-            self.__colms_list.append(['PPS_UTC', 0, 'mysql_micro_datetime'])
-            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime'])
-            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime'])
-            self.__colms_list.append(['PPSR_EPOCH', 0, 'mysql_milli_datetime'])
+            self.__colms_list.append(['PPS_UTC', 0, 'mysql_micro_datetime', 'nullable'])
+            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime', 'nullable'])
+            # self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime', 'nullable'])
+            self.__colms_list.append(['PPSR_EPOCH', 0, 'mysql_milli_datetime', 'nullable'])
         self.__colms_list.append(['time_STM_CLK', 0, 'bigint'])
         self.__colms_list.append(['time_RTC', 0, 'uint'])
         self.__colms_list.append(['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"])
