@@ -130,7 +130,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__html_file_path = f'templates/{self.__name}.html'
         # we probably dont need this, but we might one day and I dont want to 
         # debug it if we do
-        self.__html__lock = threading.Lock()
+        self.__html_lock = threading.Lock()
         ##########################################################################
         ################## initialize byte array for incomplete packets ##########
         self.__extra_packet_data = bytearray()
@@ -156,9 +156,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             Returns an file path to an html file.
         '''
-        if self.__html__lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__html_lock.acquire(timeout=1): # pylint: disable=R1732
             temp_token = self.generate_html_file(self.__html_file_path)
-            self.__html__lock.release()
+            self.__html_lock.release()
         else : 
             raise RuntimeError("Could not acquire html lock")
         return temp_token
@@ -277,7 +277,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__taps
             self.__taps_lock.release()
         else :
-            raise RuntimeError("Could not aquire taps lock")
+            raise RuntimeError("Could not acquire taps lock")
         return temp
     def create_tap(self, args):
         '''
