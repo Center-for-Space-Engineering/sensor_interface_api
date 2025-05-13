@@ -266,6 +266,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
             threadWrapper.set_event(self, f'data_received_for_{sender}')
+            if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_started', sender])
             self.__data_lock.release()
         else :
             raise RuntimeError("Could not acquire data lock")          
@@ -507,6 +509,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2-> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
+        if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'not byte'])
     def save_byte_data(self, table, data):
         '''
             This function takes in a dict of data to save, but can contain byte data
@@ -517,6 +521,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_byte_data', table, data, self.__name])
+        if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'byte'])
     def preprocess_data(self, data, delimiter:bytearray, terminator:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.
