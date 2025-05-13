@@ -315,7 +315,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else : 
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
     def publish(self): # pylint: disable=R0915
         '''
