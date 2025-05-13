@@ -6,19 +6,13 @@
 import pytest
 import yaml
 from unittest.mock import MagicMock
-from unittest import mock
 from io import StringIO
-import threading
-from pytest import ExceptionInfo
-import time
-import time
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper
 from threading_python_api.taskHandler import taskHandler
 import system_constants as sensor_config
 from sensor_interface_api.sensor_parent import sensor_parent
-from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator
 from sensor_interface_api.sobj_gps_board_aux import sobj_gps_board_aux
 from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from sensor_interface_api.sobj_gps_board import sobj_gps_board
@@ -28,14 +22,17 @@ from database_python_api.database_control import DataBaseHandler
 #TODO: elses on lock failure test
 
 '''
-    Before running this test class (specifically with the database test), you need to make sure that you have created a mysql database called
+    Before running this test, you need to make sure that you have created a mysql database called
     unit_tests_sensor_parent and have given the user ground_cse full access rights. If you have not, run these commands in root access mysql
 
     CREATE DATABASE unit_tests_sensor_parent;
     GRANT ALL PRIVILEGES ON unit_tests_sensor_parent.* TO 'ground_cse'@'localhost';
     FLUSH PRIVILEGES;
 '''
-class TestInit():
+def test_init():
+    '''
+        Tests init, get_sensor_name(), get_graph_name(), and get_html_page()
+    '''
     # setup
     db_name = 'unit_tests_sensor_parent'
     table_structure = {'sensor_test_table': [['rowan', 0, 'int'], ['row2', 0, 'float'], ['row3', 0, 'string']]}
@@ -44,131 +41,86 @@ class TestInit():
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
 
-    sensor_html_page_generator.__init__ = MagicMock()
 
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
     thread_handler.add_thread(dataBase.run, db_name, dataBase)
     thread_handler.start()
 
-    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': None, 'interval_pub': None}, name='good', db_name=db_name, table_structure=table_structure,
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good', db_name=db_name, table_structure=table_structure,
                                 graphs=['one', 'two', 'three'])
 
-    @pytest.mark.sensor_parent_tests
-    def test_get_set_name(self):
-        if not self.coms.get_running():
-            self.thread_handler.add_thread(self.coms.run, 'coms', self.coms)
-        if not self.test_sensor.get_running():
-            self.thread_handler.add_thread(self.test_sensor.run, self.test_sensor.get_sensor_name(), self.test_sensor)
-        self.thread_handler.start()
-        try:
-            print("\n\nnames\n\n")
-            # naming: valid names accepted
-            assert self.test_sensor.get_sensor_name() == 'good'
+    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    thread_handler.start()
 
-            # test get_name failure to acquire lock
-            self.test_sensor._sensor_parent__name_lock.acquire()
-            if (self.test_sensor._sensor_parent__name_lock.locked()):
-                with pytest.raises(RuntimeError) as excinfo:
-                    self.test_sensor.get_sensor_name()
-            assert "Could not acquire name lock" in str(excinfo.value)
-            self.test_sensor._sensor_parent__name_lock.release()
+    try:
+        ######################## Names set up correctly ##########################
+        # valid names accepted
+        assert test_sensor.get_sensor_name() == 'good'
 
-            # invalid names rejected
+        # test get_name failure to acquire lock
+        test_sensor._sensor_parent__name_lock.acquire()
+        if (test_sensor._sensor_parent__name_lock.locked()):
             with pytest.raises(RuntimeError) as excinfo:
-                temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad\0')
-            assert "The name bad\0, is not a valid sensor name" in str(excinfo.value)
-            
+                test_sensor.get_sensor_name()
+        assert "Could not acquire name lock" in str(excinfo.value)
+        test_sensor._sensor_parent__name_lock.release()
+
+        # invalid names rejected
+        with pytest.raises(RuntimeError) as excinfo:
+            temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad\0')
+        assert "The name bad\0, is not a valid sensor name" in str(excinfo.value)
+        
+        with pytest.raises(RuntimeError) as excinfo:
+            temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad/')
+        assert "The name bad/, is not a valid sensor name" in str(excinfo.value)
+
+        ###################### Database set up correctly #########################
+        while thread_handler.check_request(f"{db_name}", 2) is False:
+            pass
+        assert 'sensor_test_table' in dataBase.get_tables_html()
+
+        ##################### Html graphs set up correctly #######################
+        assert test_sensor.get_graph_names() == ['one', 'two', 'three']
+        assert 'one' in test_sensor.get_data_report()
+        assert 'two' in test_sensor.get_data_report()
+        assert 'three' in test_sensor.get_data_report()
+        assert test_sensor._sensor_parent__data_report_lock.locked() == False
+        assert test_sensor._sensor_parent__graphs_lock.locked() == False
+
+        # get_graph_names failure to acquire lock
+        test_sensor._sensor_parent__graphs_lock.acquire()
+        if test_sensor._sensor_parent__graphs_lock.locked():
             with pytest.raises(RuntimeError) as excinfo:
-                temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad/')
-            assert "The name bad/, is not a valid sensor name" in str(excinfo.value)
-        finally:
-            self.thread_handler.kill_tasks()
-    
-    @pytest.mark.sensor_parent_tests
-    def test_create_database(self):
-        if not self.coms.get_running():
-            self.thread_handler.add_thread(self.coms.run, 'coms', self.coms)
-        if not self.dataBase.get_running():
-            self.thread_handler.add_thread(self.dataBase.run, self.db_name, self.dataBase)
-        if not self.test_sensor.get_running():
-            self.thread_handler.add_thread(self.test_sensor.run, self.test_sensor.get_sensor_name(), self.test_sensor)
-        self.thread_handler.start()
+                test_sensor.get_graph_names()
+            assert "Could not acquire graphs lock" in str(excinfo.value)
+        test_sensor._sensor_parent__graphs_lock.release()
 
-        try:
-            # database tables set up correctly
-            while self.thread_handler.check_request(f"{self.db_name}", 2) is False:
-                pass
-            assert 'sensor_test_table' in self.dataBase.get_tables_html()
-        finally:
-            self.thread_handler.kill_tasks()
+        ##################### Html graphs set up correctly########################
+        # events set up correctly
+        assert 'data_received_for_this' in test_sensor._sensor_parent__events
+        assert 'data_received_for_that' in test_sensor._sensor_parent__events
 
-    @pytest.mark.sensor_parent_tests
-    def test_html_graphs(self):
-        '''
-            tests initialization of html graphs, as well as get_data_report and get_graph_names
-        '''
-        print("\n\nhtml graphs\n\n")
-        if not self.coms.get_running():
-            self.thread_handler.add_thread(self.coms.run, 'coms', self.coms)
-        if not self.test_sensor.get_running():
-            self.thread_handler.add_thread(self.test_sensor.run, self.test_sensor.get_sensor_name(), self.test_sensor)
-        self.thread_handler.start()
+        #################### Threadwrapper set up correctly#######################
+        assert test_sensor._threadWrapper__function_dict == test_sensor._sensor_parent__function_dict
+        assert 'data_received_for_this' in test_sensor._threadWrapper__event_dict
+        assert 'data_received_for_that' in test_sensor._threadWrapper__event_dict
 
-        try:
-            # html graphs set up correctly
-            assert self.test_sensor.get_graph_names() == ['one', 'two', 'three']
-            assert 'one' in self.test_sensor.get_data_report()
-            assert 'two' in self.test_sensor.get_data_report()
-            assert 'three' in self.test_sensor.get_data_report()
-            assert self.test_sensor._sensor_parent__data_report_lock.locked() == False
-            assert self.test_sensor._sensor_parent__graphs_lock.locked() == False
+        ###################### Html page set up correctly#########################
+        # html page generation stuff set up correctly
+        assert test_sensor.get_html_page() == 'templates/good.html'
 
-            # get_data_report failure to acquire locks
-            self.test_sensor._sensor_parent__data_report_lock.acquire()
-            if self.test_sensor._sensor_parent__data_report_lock.locked():
-                with pytest.raises(RuntimeError) as excinfo:
-                    self.test_sensor.get_data_report()
-                assert "Could not acquire data report lock" in str(excinfo.value)
-            self.test_sensor._sensor_parent__data_report_lock.release()
+        # test without lock acquired:
+        test_sensor._sensor_parent__html_lock.acquire()
+        if test_sensor._sensor_parent__html_lock.locked():
+            with pytest.raises(RuntimeError) as excinfo:
+                test_sensor.get_html_page()
 
-            # get_graph_names failure to acquire lock
-            self.test_sensor._sensor_parent__graphs_lock.acquire()
-            if self.test_sensor._sensor_parent__graphs_lock.locked():
-                with pytest.raises(RuntimeError) as excinfo:
-                    self.test_sensor.get_graph_names()
-                assert "Could not acquire graphs lock" in str(excinfo.value)
-            self.test_sensor._sensor_parent__graphs_lock.release()
+            test_sensor._sensor_parent__html_lock.release()
+            assert "Could not acquire html lock" in str(excinfo.value)
+            assert test_sensor._sensor_parent__html_lock.locked() == False
 
-        finally:
-            self.thread_handler.kill_tasks()
-
-    @pytest.mark.sensor_parent_tests
-    #TODO: dig into this
-    def test_remaining_setup(self):
-        print("\n\nsetup\n\n")
-        if not self.coms.get_running():
-            self.thread_handler.add_thread(self.coms.run, 'coms', self.coms)
-        if not self.test_sensor.get_running():
-            self.thread_handler.add_thread(self.test_sensor.run, self.test_sensor.get_sensor_name(), self.test_sensor)
-        self.thread_handler.start()
-
-        try:
-            # events set up correctly
-            assert 'data_received_for_this' in self.test_sensor._sensor_parent__events
-            assert 'data_received_for_that' in self.test_sensor._sensor_parent__events
-
-            # threadWrapper stuff set up correctly
-            assert self.test_sensor._threadWrapper__function_dict == self.test_sensor._sensor_parent__function_dict
-            assert 'data_received_for_this' in self.test_sensor._threadWrapper__event_dict
-            assert 'data_received_for_that' in self.test_sensor._threadWrapper__event_dict
-
-            # html page generation stuff set up correctly
-            #TODO: flesh this line out a little more- what can I test in html page gen to see if it was created?
-            sensor_html_page_generator.__init__.assert_called_with(self.test_sensor, self.test_sensor.get_sensor_name(), self.test_sensor._sensor_parent__config, True)
-            assert self.test_sensor._sensor_parent__html_file_path == 'templates/good.html'
-
-        finally:
-            self.thread_handler.kill_tasks()
+    finally:
+        thread_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_get_set_taps():
@@ -182,7 +134,7 @@ def test_get_set_taps():
     test_sensor.make_data_tap.assert_called_with('a')
     assert test_sensor.get_taps() == ['a']
     assert test_sensor._sensor_parent__active == True
-    test_sensor.start_publisher.assert_called_with
+    test_sensor.start_publisher.assert_called()
 
     #for getter, test if it fails to acquire lock
     test_sensor._sensor_parent__taps_lock.acquire()
@@ -220,29 +172,6 @@ def test_get_set_taps():
 
     test_sensor.start_publisher.assert_not_called
     assert test_sensor._sensor_parent__active == False
-
-@pytest.mark.sensor_parent_tests
-def test_get_html_page():
-    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='html_test')
-
-    # test with lock acquired
-    test_sensor.generate_html_file = MagicMock()
-    test_sensor.generate_html_file.return_value = 'file/path'
-    result = test_sensor.get_html_page()
-
-    test_sensor.generate_html_file.assert_called_with('templates/html_test.html')
-    assert result == 'file/path'
-    assert test_sensor._sensor_parent__html_lock.locked() == False
-
-    # test without lock acquired:
-    test_sensor._sensor_parent__html_lock.acquire()
-    if test_sensor._sensor_parent__html_lock.locked():
-        with pytest.raises(RuntimeError) as excinfo:
-            test_sensor.get_html_page()
-
-        test_sensor._sensor_parent__html_lock.release()
-        assert "Could not acquire html lock" in str(excinfo.value)
-        assert test_sensor._sensor_parent__html_lock.locked() == False
 
 @pytest.mark.sensor_parent_tests
 def test_get_set_sensor_status():
@@ -290,8 +219,6 @@ def test_get_set_sensor_status():
         assert 'Could not acquire status lock' in str(excinfo.value)
         assert test_sensor._sensor_parent__status_lock.locked() == False
 
-#NOTE: as of right now, there are no checks for invalid statuses, so there is no test for such cases. Maybe we add checks in the future.
-#TODO: test locks
 @pytest.mark.sensor_parent_tests
 def test_set_thread_status():
     test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='thread_status_test')
@@ -367,8 +294,10 @@ def test_make_data_tap():
     coms = messageHandler(destination='Local')
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
+
     source = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='source')
     tapper = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='tapper')
+
     thread_handler.add_thread(source.run, source.get_sensor_name(), source)
     thread_handler.add_thread(tapper.run, tapper.get_sensor_name(), tapper)
     thread_handler.start()
@@ -479,32 +408,211 @@ def test_start_publisher():
 
     thread_handler.kill_tasks()
 
-#TODO
+#TODO: deal with active sensor - how do I break out of the while loop???
 @pytest.mark.sensor_parent_tests
 def test_publish():
-    #wow this is very big and very long. maybe I'll go work on that init test lol
-    #maybe also do get/set publish
-    pass
+    good_data = ['abc', 'def', 'ghi']
+    bad_data = [MagicMock]
+
+    sensor_parent.start_publisher = MagicMock()
+
+    # ######################## Active sensor #######################
+    # active_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='active')
+    # active_test_sensor.set_up_taps()
+
+    # active_test_sensor.set_publish_data(good_data)
+    # active_test_sensor.publish()
+    # assert active_test_sensor.get_last_published_data()['data'] == 'g , h , i'
+
+    # active_test_sensor.set_publish_data(bad_data)
+    # active_test_sensor.publish()
+    # assert active_test_sensor.get_last_published_data()['data'] == "Unable to convert last data to string for reporting, this should not effect performance of the publishing."
+
+    # # failure to acquire lock
+    # active_test_sensor._sensor_parent__last_published_data_lock.acquire()
+    # if (active_test_sensor._sensor_parent__last_published_data_lock.locked()):
+    #     with pytest.raises(RuntimeError) as excinfo:
+    #         active_test_sensor.publish()
+        
+    #     assert "Could not acquire published data lock" in str(excinfo.value)
+    # active_test_sensor._sensor_parent__last_published_data_lock.release()
+
+    # # failure to acquire other lock
+    # active_test_sensor._sensor_parent__has_been_published_lock.acquire()
+    # if (active_test_sensor._sensor_parent__has_been_published_lock.locked()):
+    #     with pytest.raises(RuntimeError) as excinfo:
+    #         active_test_sensor.publish()
+        
+    #     assert "Could not acquire has been published lock" in str(excinfo.value)
+    # active_test_sensor._sensor_parent__has_been_published_lock.release()
+
+    ####################### Passive sensor #######################
+    passive_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='passive')
+    passive_test_sensor.set_up_taps()
+
+    passive_test_sensor.set_publish_data(good_data)
+    passive_test_sensor.publish()
+    assert passive_test_sensor.get_last_published_data()['data'] == 'g , h , i'
+
+    passive_test_sensor.set_publish_data(bad_data)
+    passive_test_sensor.publish()
+    assert passive_test_sensor.get_last_published_data()['data'] == "Unable to convert last data to string for reporting, this should not effect performance of the publishing."
+
+    # failure to acquire lock
+    passive_test_sensor._sensor_parent__last_published_data_lock.acquire()
+    if (passive_test_sensor._sensor_parent__last_published_data_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            passive_test_sensor.publish()
+        
+        assert "Could not acquire last published data lock" in str(excinfo.value)
+    passive_test_sensor._sensor_parent__last_published_data_lock.release()
+
+    # failure to acquire lock
+    passive_test_sensor._sensor_parent__has_been_published_lock.acquire()
+    if (passive_test_sensor._sensor_parent__has_been_published_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            passive_test_sensor.publish()
+        
+        assert "Could not acquire has been published lock" in str(excinfo.value)
+    passive_test_sensor._sensor_parent__has_been_published_lock.release()
 
 #TODO
 @pytest.mark.sensor_parent_tests
 def test_send_data():
-    pass
+    coms = messageHandler()
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(thread_handler)
 
-#TODO
+    receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
+    sender = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='sender')
+
+    thread_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
+    thread_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
+    thread_handler.start()
+
+    try:
+        # receiver.send_tap = MagicMock()
+        receiver.set_up_taps()
+        sender.set_up_taps()
+
+        sender.send_data_to_tap()
+        # receiver.send_tap.assert_called()
+        
+        # failure to acquire publish data lock
+        sender._sensor_parent__publish_data_lock.acquire()
+        if (sender._sensor_parent__publish_data_lock.locked()):
+            with pytest.raises(RuntimeError) as excinfo:
+                sender.send_data_to_tap()
+            assert "Could not acquire publish data lock" in str(excinfo.value)
+        sender._sensor_parent__publish_data_lock.release()
+
+        # failure to acquire subscribers lock
+        sender._sensor_parent__tap_subscribers_lock.acquire()
+        if (sender._sensor_parent__tap_subscribers_lock.locked()):
+            with pytest.raises(RuntimeError) as excinfo:
+                sender.send_data_to_tap()
+            assert "Could not acquire config lock" in str(excinfo.value)
+        sender._sensor_parent__tap_subscribers_lock.release()
+        
+        # failure to acquire tap requests lock
+        sender._sensor_parent__tap_requests_lock.acquire()
+        if (sender._sensor_parent__tap_requests_lock.locked()):
+            with pytest.raises(RuntimeError) as excinfo:
+                sender.send_data_to_tap()
+            assert "Could not acquire tap requests lock" in str(excinfo.value)
+        sender._sensor_parent__tap_requests_lock.release()
+
+    finally:
+        thread_handler.kill_tasks()
+
 @pytest.mark.sensor_parent_tests
-def test_get_set_publish():
-    pass
+def test_set_check_publish():
+    '''
+        Tests set_publish_data() and has_been_published()
+    '''
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Shawn')
+    data = [1, 2, 3]
+    
+    test_sensor.set_publish_data(data)
+    assert not test_sensor.has_been_published()
+    assert test_sensor._sensor_parent__publish_data == data
 
-#TODO
+    # set_publish_data failure to acquire locks
+    test_sensor._sensor_parent__publish_data_lock.acquire()
+    if (test_sensor._sensor_parent__publish_data_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.set_publish_data(data)
+        
+        assert "Could not acquire publish data lock" in str(excinfo.value)
+    test_sensor._sensor_parent__publish_data_lock.release()
+
+    test_sensor._sensor_parent__has_been_published_lock.acquire()
+    if (test_sensor._sensor_parent__has_been_published_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.set_publish_data(data)
+        
+        assert "Could not acquire has been published lock" in str(excinfo.value)
+    test_sensor._sensor_parent__has_been_published_lock.release()
+
+    # has_been_published failure to acquire lock
+    test_sensor._sensor_parent__has_been_published_lock.acquire()
+    if (test_sensor._sensor_parent__has_been_published_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.has_been_published()
+        
+        assert "Could not acquire has been published lock" in str(excinfo.value)
+    test_sensor._sensor_parent__has_been_published_lock.release()
+
 @pytest.mark.sensor_parent_tests
 def test_get_set_graph_data():
-    pass
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Tim', graphs=['plot', 'over'])
 
-#TODO
+    # inserting a point
+    test_sensor.add_graph_data('plot', [2], [3])
+    data_report = test_sensor.get_data_report()
+    assert data_report['plot'] == {'x': [2], 'y': [3]}
+    assert data_report['over'] == {'x': [], 'y': []}
+
+    # reaching max number of data points
+    test_sensor.add_graph_data('over', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+    data_report = test_sensor.get_data_report()
+    assert data_report['over'] == {'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'y': [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}
+
+    # add_graph_data fail to acquire lock
+    test_sensor._sensor_parent__data_report_lock.acquire()
+    if (test_sensor._sensor_parent__data_report_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.add_graph_data('plot', 2, 3)
+        
+        assert "Could not acquire data report lock" in str(excinfo.value)
+    test_sensor._sensor_parent__data_report_lock.release()
+
+    # get_data_report failure to acquire locks
+    test_sensor._sensor_parent__data_report_lock.acquire()
+    if test_sensor._sensor_parent__data_report_lock.locked():
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.get_data_report()
+        assert "Could not acquire data report lock" in str(excinfo.value)
+    test_sensor._sensor_parent__data_report_lock.release()
+
 @pytest.mark.sensor_parent_tests
 def test_get_last_published_data():
-    pass
+    data = ['abc', 'def', 'ghi']
+
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='active')
+
+    test_sensor.set_publish_data(data)
+    test_sensor.publish()
+    assert test_sensor.get_last_published_data()['data'] == 'g , h , i'
+
+    # failure to acquire lock
+    test_sensor._sensor_parent__last_published_data_lock.acquire()
+    if (test_sensor._sensor_parent__last_published_data_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            test_sensor.get_last_published_data()
+        
+        assert "Could not acquire last published data lock" in str(excinfo.value)
+    test_sensor._sensor_parent__last_published_data_lock.release()
 
 #TODO: ew coms
 @pytest.mark.sensor_parent_tests
@@ -526,7 +634,10 @@ def test_preprocess_data():
 def test_preprocess_ccsds_data():
     pass
 
-#TODO: easy
 @pytest.mark.sensor_parent_tests
 def test_int_to_bytes():
-    pass
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Phillip')
+    
+    assert test_sensor.int_to_bytes(0) == (0).to_bytes()
+    assert test_sensor.int_to_bytes(3) == (3).to_bytes()
+    assert test_sensor.int_to_bytes(1234567) == (1234567).to_bytes(length=3)
