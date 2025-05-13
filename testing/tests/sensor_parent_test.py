@@ -159,8 +159,8 @@ class TestInit():
 
             # threadWrapper stuff set up correctly
             assert self.test_sensor._threadWrapper__function_dict == self.test_sensor._sensor_parent__function_dict
-            for event in self.test_sensor._sensor_parent__events:
-                assert event in self.test_sensor._threadWrapper__event_dict
+            assert 'data_received_for_this' in self.test_sensor._threadWrapper__event_dict
+            assert 'data_received_for_that' in self.test_sensor._threadWrapper__event_dict
 
             # html page generation stuff set up correctly
             #TODO: flesh this line out a little more- what can I test in html page gen to see if it was created?
@@ -237,15 +237,11 @@ def test_get_html_page():
     # test without lock acquired:
     test_sensor._sensor_parent__html_lock.acquire()
     if test_sensor._sensor_parent__html_lock.locked():
-    test_sensor._sensor_parent__html_lock.acquire()
-    if test_sensor._sensor_parent__html_lock.locked():
         with pytest.raises(RuntimeError) as excinfo:
             test_sensor.get_html_page()
 
         test_sensor._sensor_parent__html_lock.release()
-        test_sensor._sensor_parent__html_lock.release()
         assert "Could not acquire html lock" in str(excinfo.value)
-        assert test_sensor._sensor_parent__html_lock.locked() == False
         assert test_sensor._sensor_parent__html_lock.locked() == False
 
 @pytest.mark.sensor_parent_tests
@@ -379,29 +375,7 @@ def test_make_data_tap():
 
     try:
         tapper.make_data_tap('source')
-    thread_handler.start()
 
-    try:
-        tapper.make_data_tap('source')
-
-        while thread_handler.check_request('source', 1) is False:
-            pass
-        assert 'tapper' in source._sensor_parent__tap_subscribers
-
-        # test for failure to acquire name_lock
-        tapper._sensor_parent__name_lock.acquire()
-        # mock send_request to make sure it isn't called
-        coms.send_request = MagicMock()
-        if tapper._sensor_parent__name_lock.locked():
-            with pytest.raises(RuntimeError) as excinfo:
-                tapper.make_data_tap('source')
-
-            tapper._sensor_parent__name_lock.release()
-            assert 'Could not acquire name lock' in str(excinfo.value)
-            assert tapper._sensor_parent__name_lock.locked() == False
-        coms.send_request.assert_not_called()
-    finally:
-        thread_handler.kill_tasks()
         while thread_handler.check_request('source', 1) is False:
             pass
         assert 'tapper' in source._sensor_parent__tap_subscribers
