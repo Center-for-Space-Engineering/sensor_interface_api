@@ -405,7 +405,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     i += 1
                     self.__tap_requests_lock.release()
                 else : 
-                    raise RuntimeError('Couald not acquire tap requests lock')
+                    raise RuntimeError('Could not acquire tap requests lock')
         return data_copy      
     def set_publish_data(self, data):
         '''
