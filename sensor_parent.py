@@ -78,11 +78,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__data_buffer_overwrite_lock = threading.Lock()
         self.__data_overwrite_exception = data_overwrite_exception
         #check to make sure the name is a valid name
-        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
+        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the pattern for valid file names. 
         if bool(re.match(pattern, name)):
             self.__name = name
         else :
-            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
+            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the standard file format. Please change the name.')
         # self.__logger = loggerCustom(f"logs/sensor_parent_{self.__name}.txt")
         self.__events = events_dict
         self.__active = False

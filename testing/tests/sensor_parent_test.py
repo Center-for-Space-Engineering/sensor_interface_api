@@ -11,6 +11,7 @@ from io import StringIO
 import threading
 from pytest import ExceptionInfo
 import time
+import time
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper
@@ -19,6 +20,7 @@ import system_constants as sensor_config
 from sensor_interface_api.sensor_parent import sensor_parent
 from sensor_interface_api.sensor_html_page_generator import sensor_html_page_generator
 from sensor_interface_api.sobj_gps_board_aux import sobj_gps_board_aux
+from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from logging_system_display_python_api.messageHandler import messageHandler
 from database_python_api.database_control import DataBaseHandler
@@ -235,11 +237,15 @@ def test_get_html_page():
     # test without lock acquired:
     test_sensor._sensor_parent__html_lock.acquire()
     if test_sensor._sensor_parent__html_lock.locked():
+    test_sensor._sensor_parent__html_lock.acquire()
+    if test_sensor._sensor_parent__html_lock.locked():
         with pytest.raises(RuntimeError) as excinfo:
             test_sensor.get_html_page()
 
         test_sensor._sensor_parent__html_lock.release()
+        test_sensor._sensor_parent__html_lock.release()
         assert "Could not acquire html lock" in str(excinfo.value)
+        assert test_sensor._sensor_parent__html_lock.locked() == False
         assert test_sensor._sensor_parent__html_lock.locked() == False
 
 @pytest.mark.sensor_parent_tests
@@ -338,6 +344,7 @@ def test_get_data():
 
     # test for failure to acquire data_buffer_overwrite_lock
     receiver.send_tap([], 'sender') # send new piece of data so we can test it later
+    receiver.send_tap([], 'sender') # send new piece of data so we can test it later
     receiver._sensor_parent__data_buffer_overwrite_lock.acquire()
     if receiver._sensor_parent__data_buffer_overwrite_lock.locked():
         with pytest.raises(RuntimeError) as excinfo:
@@ -372,7 +379,29 @@ def test_make_data_tap():
 
     try:
         tapper.make_data_tap('source')
+    thread_handler.start()
 
+    try:
+        tapper.make_data_tap('source')
+
+        while thread_handler.check_request('source', 1) is False:
+            pass
+        assert 'tapper' in source._sensor_parent__tap_subscribers
+
+        # test for failure to acquire name_lock
+        tapper._sensor_parent__name_lock.acquire()
+        # mock send_request to make sure it isn't called
+        coms.send_request = MagicMock()
+        if tapper._sensor_parent__name_lock.locked():
+            with pytest.raises(RuntimeError) as excinfo:
+                tapper.make_data_tap('source')
+
+            tapper._sensor_parent__name_lock.release()
+            assert 'Could not acquire name lock' in str(excinfo.value)
+            assert tapper._sensor_parent__name_lock.locked() == False
+        coms.send_request.assert_not_called()
+    finally:
+        thread_handler.kill_tasks()
         while thread_handler.check_request('source', 1) is False:
             pass
         assert 'tapper' in source._sensor_parent__tap_subscribers
