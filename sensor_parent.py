@@ -78,11 +78,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__data_buffer_overwrite_lock = threading.Lock()
         self.__data_overwrite_exception = data_overwrite_exception
         #check to make sure the name is a valid name
-        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
+        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the pattern for valid file names. 
         if bool(re.match(pattern, name)):
             self.__name = name
         else :
-            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
+            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the standard file format. Please change the name.')
         # self.__logger = loggerCustom(f"logs/sensor_parent_{self.__name}.txt")
         self.__events = events_dict
         self.__active = False
@@ -130,7 +130,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__html_file_path = f'templates/{self.__name}.html'
         # we probably dont need this, but we might one day and I dont want to 
         # debug it if we do
-        self.__html__lock = threading.Lock()
+        self.__html_lock = threading.Lock()
         ##########################################################################
         ################## initialize byte array for incomplete packets ##########
         self.__extra_packet_data = bytearray()
@@ -156,9 +156,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             Returns an file path to an html file.
         '''
-        if self.__html__lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__html_lock.acquire(timeout=1): # pylint: disable=R1732
             temp_token = self.generate_html_file(self.__html_file_path)
-            self.__html__lock.release()
+            self.__html_lock.release()
         else : 
             raise RuntimeError("Could not acquire html lock")
         return temp_token
@@ -279,7 +279,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__taps
             self.__taps_lock.release()
         else :
-            raise RuntimeError("Could not aquire taps lock")
+            raise RuntimeError("Could not acquire taps lock")
         return temp
     def create_tap(self, args):
         '''
@@ -317,7 +317,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else : 
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
     def publish(self): # pylint: disable=R0915
         '''
@@ -407,7 +407,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     i += 1
                     self.__tap_requests_lock.release()
                 else : 
-                    raise RuntimeError('Couald not acquire tap requests lock')
+                    raise RuntimeError('Could not acquire tap requests lock')
         return data_copy      
     def set_publish_data(self, data):
         '''
