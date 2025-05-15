@@ -47,7 +47,7 @@ def test_init():
     thread_handler.start()
 
     try:
-        test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good', db_name=db_name, table_structure=table_structure,
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good_sensor', db_name=db_name, table_structure=table_structure,
                                     graphs=['one', 'two', 'three'])
 
         thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
@@ -55,7 +55,7 @@ def test_init():
 
         ######################## Names set up correctly ##########################
         # valid names accepted
-        assert test_sensor.get_sensor_name() == 'good'
+        assert test_sensor.get_sensor_name() == 'good_sensor'
 
         # test get_name failure to acquire lock
         test_sensor._sensor_parent__name_lock.acquire()
@@ -105,7 +105,7 @@ def test_init():
 
         ###################### Html page set up correctly#########################
         # html page generation stuff set up correctly
-        assert test_sensor.get_html_page() == 'templates/good.html'
+        assert test_sensor.get_html_page() == 'templates/good_sensor.html'
 
         # test without lock acquired:
         test_sensor._sensor_parent__html_lock.acquire()
