@@ -21,6 +21,8 @@ from database_python_api.database_control import DataBaseHandler
 
 #TODO: elses on lock failure test
 
+db_name = 'unit_tests_sensor_parent'
+
 '''
     Before running this test, you need to make sure that you have created a mysql database called
     unit_tests_sensor_parent and have given the user ground_cse full access rights. If you have not, run these commands in root access mysql
@@ -34,25 +36,23 @@ def test_init():
         Tests init, get_sensor_name(), get_graph_name(), and get_html_page()
     '''
     # setup
-    db_name = 'unit_tests_sensor_parent'
-    table_structure = {'sensor_test_table': [['rowan', 0, 'int'], ['row2', 0, 'float'], ['row3', 0, 'string']]}
+    table_structure = {'init_test_table': [['rowan', 0, 'int'], ['row2', 0, 'float'], ['row3', 0, 'string']]}
 
     coms = messageHandler()
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=thread_handler)
 
-
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
     thread_handler.add_thread(dataBase.run, db_name, dataBase)
     thread_handler.start()
 
-    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good', db_name=db_name, table_structure=table_structure,
-                                graphs=['one', 'two', 'three'])
-
-    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-    thread_handler.start()
-
     try:
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good', db_name=db_name, table_structure=table_structure,
+                                    graphs=['one', 'two', 'three'])
+
+        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        thread_handler.start()
+
         ######################## Names set up correctly ##########################
         # valid names accepted
         assert test_sensor.get_sensor_name() == 'good'
@@ -67,17 +67,15 @@ def test_init():
 
         # invalid names rejected
         with pytest.raises(RuntimeError) as excinfo:
-            temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad\0')
+            bad_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad\0')
         assert "The name bad\0, is not a valid sensor name" in str(excinfo.value)
         
         with pytest.raises(RuntimeError) as excinfo:
-            temp_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad/')
+            bad_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': None, 'interval_pub': None}, name='bad/')
         assert "The name bad/, is not a valid sensor name" in str(excinfo.value)
 
         ###################### Database set up correctly #########################
-        while thread_handler.check_request(f"{db_name}", 2) is False:
-            pass
-        assert 'sensor_test_table' in dataBase.get_tables_html()
+        assert 'init_test_table' in dataBase.get_tables_html()
 
         ##################### Html graphs set up correctly #######################
         assert test_sensor.get_graph_names() == ['one', 'two', 'three']
@@ -120,6 +118,7 @@ def test_init():
             assert test_sensor._sensor_parent__html_lock.locked() == False
 
     finally:
+        dataBase._DataBaseHandler__close_sql_connections()
         thread_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
@@ -354,7 +353,6 @@ def test_send_tap():
 
     try:
         test_sensor.send_tap(data=[1, 2, 3], sender='source')
-        print(f"{temp=}")
         assert test_sensor._sensor_parent__data_buffer_overwrite == False
         # assert that return val is something or other
         # assert data in data_received list
@@ -478,7 +476,7 @@ def test_publish():
 
 #TODO
 @pytest.mark.sensor_parent_tests
-def test_send_data():
+def test_send_data_to_tap():
     coms = messageHandler()
     thread_handler = taskHandler(coms=coms)
     coms.set_thread_handler(thread_handler)
@@ -614,10 +612,34 @@ def test_get_last_published_data():
         assert "Could not acquire last published data lock" in str(excinfo.value)
     test_sensor._sensor_parent__last_published_data_lock.release()
 
-#TODO: ew coms
 @pytest.mark.sensor_parent_tests
 def test_save_data():
-    pass
+    #test if read_from_file is true
+
+    #test if read_from_file is false
+    table_structure = {'save_data_test_table': [['first', 0, 'int'], ['second', 0, 'float'], ['third', 0, 'string']]}
+    
+    coms = messageHandler()
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    thread_handler.add_thread(dataBase.run, db_name, dataBase)
+    thread_handler.start()
+
+    try:
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_data_test', db_name=db_name, table_structure=table_structure)
+        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        thread_handler.start()
+
+        test_sensor.save_data(table='save_data_test_table', data={'first': [1], 'second': [0.5], 'third': ['x']})
+        
+        print(f'\n\n{dataBase.get_data(['save_data_test_table', 1])}\n\n')
+        # assert in dataBase.get_data(['save_data_test_table', 0])
+
+    finally:
+        dataBase._DataBaseHandler__close_sql_connections()
+        thread_handler.kill_tasks()
 
 #TODO: ew coms
 @pytest.mark.sensor_parent_tests
