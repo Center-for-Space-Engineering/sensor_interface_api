@@ -18,6 +18,7 @@ from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from logging_system_display_python_api.messageHandler import messageHandler
 from database_python_api.database_control import DataBaseHandler
+from cmd_inter import cmd_inter
 
 #TODO: elses on lock failure test
 
@@ -615,6 +616,7 @@ def test_get_last_published_data():
 @pytest.mark.sensor_parent_tests
 def test_save_data():
     #test if read_from_file is true
+    #plan: mock logger.send_log and assert called with f"{sensor_name} ended"
 
     #test if read_from_file is false
     table_structure = {'save_data_test_table': [['first', 0, 'int'], ['second', 0, 'float'], ['third', 0, 'string']]}
@@ -631,14 +633,31 @@ def test_save_data():
         test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_data_test', db_name=db_name, table_structure=table_structure)
         thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
         thread_handler.start()
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'create_table_external':
+                request_num = request[4]
 
+        while dataBase.check_request(request_num) is False:
+            pass
+
+        print(f"\n\n{dataBase._DataBaseHandler__conn.is_connected()=}\n\n")
+        
+        # issue is here now - cursor is apparently unconnected or something :/
         test_sensor.save_data(table='save_data_test_table', data={'first': [1], 'second': [0.5], 'third': ['x']})
         
-        print(f'\n\n{dataBase.get_data(['save_data_test_table', 1])}\n\n')
-        # assert in dataBase.get_data(['save_data_test_table', 0])
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'save_data_group':
+                request_num = request[4]
+        
+        while dataBase.check_request(request_num) is False:
+            pass
+        
+        print(f'\n\n{dataBase.get_data(['save_data_test_table', 0])=}\n\n')
+        assert '1,0.5,x' in dataBase.get_data(['save_data_test_table', 0])
 
     finally:
-        dataBase._DataBaseHandler__close_sql_connections()
+        # dataBase._DataBaseHandler__close_sql_connections()
         thread_handler.kill_tasks()
 
 #TODO: ew coms
