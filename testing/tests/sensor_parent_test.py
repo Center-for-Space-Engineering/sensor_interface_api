@@ -15,7 +15,6 @@ import system_constants as sensor_config
 from sensor_interface_api.sensor_parent import sensor_parent
 from sensor_interface_api.sobj_gps_board_aux import sobj_gps_board_aux
 from sensor_interface_api.sobj_gps_board import sobj_gps_board
-from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from logging_system_display_python_api.messageHandler import messageHandler
 from database_python_api.database_control import DataBaseHandler
 from cmd_inter import cmd_inter
@@ -32,6 +31,7 @@ db_name = 'unit_tests_sensor_parent'
     GRANT ALL PRIVILEGES ON unit_tests_sensor_parent.* TO 'ground_cse'@'localhost';
     FLUSH PRIVILEGES;
 '''
+@pytest.mark.sensor_parent_tests
 def test_init():
     '''
         Tests init, get_sensor_name(), get_graph_name(), and get_html_page()
@@ -490,13 +490,17 @@ def test_send_data_to_tap():
     thread_handler.start()
 
     try:
-        # receiver.send_tap = MagicMock()
+        data = ['abc', 'def']
         receiver.set_up_taps()
         sender.set_up_taps()
 
+        while sender.check_request(1) is False:
+            pass
+
+        sender.set_publish_data(data)
         sender.send_data_to_tap()
-        # receiver.send_tap.assert_called()
         
+        assert receiver._sensor_parent__data_received['sender'] == data
         # failure to acquire publish data lock
         sender._sensor_parent__publish_data_lock.acquire()
         if (sender._sensor_parent__publish_data_lock.locked()):
@@ -512,15 +516,21 @@ def test_send_data_to_tap():
                 sender.send_data_to_tap()
             assert "Could not acquire config lock" in str(excinfo.value)
         sender._sensor_parent__tap_subscribers_lock.release()
+        print("done1")
         
+        data = [123, 45]
         # failure to acquire tap requests lock
         sender._sensor_parent__tap_requests_lock.acquire()
+        print(F"{receiver._sensor_parent__data_buffer_overwrite=}")
         if (sender._sensor_parent__tap_requests_lock.locked()):
+            print("locked")
             with pytest.raises(RuntimeError) as excinfo:
                 sender.send_data_to_tap()
             assert "Could not acquire tap requests lock" in str(excinfo.value)
+            print("error raised")
+        print("releasing...")
         sender._sensor_parent__tap_requests_lock.release()
-
+        print("done2")
     finally:
         thread_handler.kill_tasks()
 
