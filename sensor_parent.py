@@ -218,7 +218,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             self.__data_buffer_overwrite_lock.release()
         else :
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
-        if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__data_lock.acquire(timeout=5): # pylint: disable=R1732
             data_copy = copy.deepcopy(self.__data_received[tap_name])
             self.__data_lock.release()
         else : 
