@@ -204,7 +204,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
             thread. If you have large amounts of processing have this function create another thread and process the data on that. 
         '''
-        self.__logger.send_log('here')
         raise NotImplementedError("process_data Not implemented, should process that last data received (data is stored in the __data_received variable).")
     def get_data_received(self, tap_name):
         '''
@@ -386,13 +385,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             raise RuntimeError('Could not acquire config lock')
 
         i = 0
-
         for subscriber in config_copy_subscribers: #loop on copies
             temp  = copy.deepcopy(data_copy) #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate.
 
             is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
             is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
-
             while is_ready is not True:
                 time.sleep(0.01)
                 is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
@@ -400,7 +397,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 if not is_ready:
                     is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
                     is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
-
             if is_ready:
                 if self.__tap_requests_lock.acquire(timeout=10): # pylint: disable=R1732
                     self.__tap_requests[i](temp, self.get_sensor_name()) # call the get sensor name so that the data is mutex protected.
