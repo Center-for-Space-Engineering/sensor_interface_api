@@ -377,11 +377,26 @@ def test_send_tap():
     finally:
         thread_handler.kill_tasks()
 
-#TODO
 @pytest.mark.sensor_parent_tests
 def test_create_tap():
-    #real talk, should I just put all the tap related stuff in one long ass test?
-    pass
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Tim')
+
+    test_sensor.create_tap([None, None])
+    test_sensor.create_tap([MagicMock, 'subscriber_name'])
+    assert test_sensor._sensor_parent__tap_requests == [MagicMock]
+    assert test_sensor._sensor_parent__tap_subscribers ==['subscriber_name']
+    
+    test_sensor._sensor_parent__tap_requests_lock.acquire()
+    with pytest.raises(RuntimeError) as excinfo:
+        test_sensor.create_tap([MagicMock, 'subscriber_name'])
+    assert "Could not acquire tap requests lock" in str(excinfo.value)
+    test_sensor._sensor_parent__tap_requests_lock.release()
+
+    test_sensor._sensor_parent__tap_subscribers_lock.acquire()
+    with pytest.raises(RuntimeError) as excinfo:
+        test_sensor.create_tap([MagicMock, 'subscriber_name'])
+    assert "Could not acquire config lock" in str(excinfo.value)
+    test_sensor._sensor_parent__tap_subscribers_lock.release()
 
 @pytest.mark.sensor_parent_tests
 def test_start_publisher():
@@ -475,7 +490,6 @@ def test_publish():
         assert "Could not acquire has been published lock" in str(excinfo.value)
     passive_test_sensor._sensor_parent__has_been_published_lock.release()
 
-#TODO
 @pytest.mark.sensor_parent_tests
 def test_send_data_to_tap():
     coms = messageHandler()
@@ -501,6 +515,31 @@ def test_send_data_to_tap():
         sender.send_data_to_tap()
         
         assert receiver._sensor_parent__data_received['sender'] == data
+    finally:
+        thread_handler.kill_tasks()
+
+@pytest.mark.sensor_parent_tests
+def test_fail_send_data_to_tap():
+    coms = messageHandler()
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(thread_handler)
+
+    receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
+    sender = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='sender')
+
+    thread_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
+    thread_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
+    thread_handler.start()
+
+    try:
+        data = ['abc', 'def']
+        receiver.set_up_taps()
+        sender.set_up_taps()
+
+        while sender.check_request(1) is False:
+            pass
+
+        sender.set_publish_data(data)
         # failure to acquire publish data lock
         sender._sensor_parent__publish_data_lock.acquire()
         if (sender._sensor_parent__publish_data_lock.locked()):
@@ -516,21 +555,14 @@ def test_send_data_to_tap():
                 sender.send_data_to_tap()
             assert "Could not acquire config lock" in str(excinfo.value)
         sender._sensor_parent__tap_subscribers_lock.release()
-        print("done1")
         
-        data = [123, 45]
         # failure to acquire tap requests lock
         sender._sensor_parent__tap_requests_lock.acquire()
-        print(F"{receiver._sensor_parent__data_buffer_overwrite=}")
         if (sender._sensor_parent__tap_requests_lock.locked()):
-            print("locked")
             with pytest.raises(RuntimeError) as excinfo:
                 sender.send_data_to_tap()
             assert "Could not acquire tap requests lock" in str(excinfo.value)
-            print("error raised")
-        print("releasing...")
         sender._sensor_parent__tap_requests_lock.release()
-        print("done2")
     finally:
         thread_handler.kill_tasks()
 
@@ -651,7 +683,6 @@ def test_save_data():
         while dataBase.check_request(request_num) is False:
             pass
 
-        print(f"\n\n{dataBase._DataBaseHandler__conn.is_connected()=}\n\n")
         
         # issue is here now - cursor is apparently unconnected or something :/
         test_sensor.save_data(table='save_data_test_table', data={'first': [1], 'second': [0.5], 'third': ['x']})
@@ -663,7 +694,6 @@ def test_save_data():
         while dataBase.check_request(request_num) is False:
             pass
         
-        print(f'\n\n{dataBase.get_data(['save_data_test_table', 0])=}\n\n')
         assert '1,0.5,x' in dataBase.get_data(['save_data_test_table', 0])
 
     finally:
