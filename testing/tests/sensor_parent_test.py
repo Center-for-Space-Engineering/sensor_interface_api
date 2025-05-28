@@ -18,6 +18,7 @@ from sensor_interface_api.sobj_gps_board import sobj_gps_board
 from logging_system_display_python_api.messageHandler import messageHandler
 from database_python_api.database_control import DataBaseHandler
 from cmd_inter import cmd_inter
+from port_interface_api.file_read_api.file_listener import file_listener
 
 #TODO: elses on lock failure test
 
@@ -683,8 +684,6 @@ def test_save_data():
         while dataBase.check_request(request_num) is False:
             pass
 
-        
-        # issue is here now - cursor is apparently unconnected or something :/
         test_sensor.save_data(table='save_data_test_table', data={'first': [1], 'second': [0.5], 'third': ['x']})
         
         for request in dataBase._threadWrapper__request:
@@ -697,13 +696,89 @@ def test_save_data():
         assert '1,0.5,x' in dataBase.get_data(['save_data_test_table', 0])
 
     finally:
-        # dataBase._DataBaseHandler__close_sql_connections()
+        dataBase._DataBaseHandler__close_sql_connections()
         thread_handler.kill_tasks()
 
-#TODO: ew coms
 @pytest.mark.sensor_parent_tests
-def test_save_byte_data():
-    pass
+def test_save_byte_data_read_from_file():
+    #test if read_from_file is false
+    sensor_config.read_from_file = True
+    table_structure = {'save_byte_data_test_table': [['first', 4, 'byte']]}
+    
+    coms = messageHandler()
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+
+    file_listener_obj = file_listener(coms, thread_name='file_listener', batch_size=1024, batch_collection_number_before_save=10, import_bin_path='')
+    thread_handler.add_thread(file_listener_obj.run, 'file_listener', file_listener_obj)
+    sensor_config.file_listener_name = 'file_listener'
+    file_listener_obj._file_listener__logger.send_log = MagicMock()
+
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    thread_handler.add_thread(dataBase.run, db_name, dataBase)
+    thread_handler.start()
+
+    try:
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_byte_data_test', db_name=db_name, table_structure=table_structure)
+        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        thread_handler.start()
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'create_table_external':
+                request_num = request[4]
+
+        while dataBase.check_request(request_num) is False:
+            pass
+        test_sensor.save_byte_data(table='save_byte_data_test_table', data={'first': [[11]]})
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'save_byte_data':
+                request_num = request[4]
+        while dataBase.check_request(request_num) is False:
+            pass
+        assert 'x0b' in dataBase.get_data(['save_byte_data_test_table', 0])
+
+        file_listener_obj._file_listener__logger.send_log.assert_called_with("['save_byte_data_testbyte'] ended")
+    finally:
+        dataBase._DataBaseHandler__close_sql_connections()
+        thread_handler.kill_tasks()
+
+@pytest.mark.sensor_parent_tests
+def test_save_byte_data_not_read_from_file():
+    #test if read_from_file is false
+    table_structure = {'save_byte_data_test_table': [['first', 4, 'byte']]}
+    
+    coms = messageHandler()
+    thread_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=thread_handler)
+
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    thread_handler.add_thread(dataBase.run, db_name, dataBase)
+    thread_handler.start()
+
+    try:
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_byte_data_test', db_name=db_name, table_structure=table_structure)
+        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        thread_handler.start()
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'create_table_external':
+                request_num = request[4]
+
+        while dataBase.check_request(request_num) is False:
+            pass
+        test_sensor.save_byte_data(table='save_byte_data_test_table', data={'first': [[11]]})
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'save_byte_data':
+                request_num = request[4]
+        while dataBase.check_request(request_num) is False:
+            pass
+        assert 'x0b' in dataBase.get_data(['save_byte_data_test_table', 0])
+
+    finally:
+        dataBase._DataBaseHandler__close_sql_connections()
+        thread_handler.kill_tasks()
 
 #TODO
 @pytest.mark.sensor_parent_tests
