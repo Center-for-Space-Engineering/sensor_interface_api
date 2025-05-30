@@ -800,9 +800,10 @@ def test_preprocess_data():
     assert partial_start == True
     assert partial_end == True
 
-#potential issue: if the first packet is bad, it might not be recognized as a bad packet (does this matter too much? if all the packets are bad, it will look like we aren't getting anything, which would be bad.)
+#potential issue with preprocess_ccsds_data: if the first packet is bad, it might not be recognized as a bad packet, and if all the headers get messed up, it could look like we're getting no data
 @pytest.mark.sensor_parent_tests
 def test_preprocess_ccsds_data_good_packet():
+    # tests
     sensor_config.sync_word_len = 4
     sensor_config.ccsds_header_len = 5
     sensor_config.sync_word = 0x352ef853
@@ -820,16 +821,11 @@ def test_preprocess_ccsds_data_good_packet():
         assert bytes(packets[0]) in data[0]
         assert bad_packets is False
 
-#TODO: fix files probably, maybe even just take out the second test
 @pytest.mark.sensor_parent_tests
 def test_preprocess_ccsds_data_incomplete_packets():
-    #first preprocess call
-    # incomplete start packet: one packet with enough header room, but no sync word
-    # good incomplete: one packet with enough header room, a good sync word, and incomplete packet
+    #incomplete_test_packet_1 contains an incomplete packet followed by the first half of a good packet
+    #incomplete_test_packet_2 contains the second half of the good packet and a fragment of a packet header
 
-    #second preprocess call
-    # another incomplete start, but this is just the end of the previous packet (make sure they get put back together)
-    # incomplete end packet: one packet with too little room for a full header
     sensor_config.sync_word_len = 4
     sensor_config.ccsds_header_len = 5
     sensor_config.sync_word = 0x352ef853
@@ -842,18 +838,18 @@ def test_preprocess_ccsds_data_incomplete_packets():
         with open('sensor_interface_api/testing/sensor_test/incomplete_test_packet_2.bin', 'rb+') as file2:
             data1 = [file1.read()]
             data2 = [file2.read()]
-            # full_data = [data1[0]].append(data2[0])
+            full_data = bytes().join(data1) + bytes().join(data2)
     
     if file1 is not None and file2 is not None:
-        packets1, bad_packets1 = test_sensor.preprocess_ccsds_data(data=data1)
-        packets2, bad_packets2 = test_sensor.preprocess_ccsds_data(data=data2)
-        
-        assert len(packets1) == 0
-        assert len(packets2) == 1
-        # assert bytes(packets2[0]) in full_data[0]
-        assert bytes(packets2[0]) in data2[0]
-        assert bad_packets1 is False
-        assert bad_packets2 is False
+        packets, bad_packets = test_sensor.preprocess_ccsds_data(data=data1)
+        assert len(packets) == 0
+        assert bad_packets is False
+
+        packets, bad_packets = test_sensor.preprocess_ccsds_data(data=data2)
+        assert len(packets) == 1
+        print(f"{packets=}")
+        assert bytes(packets[0]) in full_data
+        assert bad_packets is False
 
 @pytest.mark.sensor_parent_tests
 def test_preprocess_ccsds_data_bad_packet():
