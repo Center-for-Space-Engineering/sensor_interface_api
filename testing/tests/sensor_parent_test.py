@@ -7,6 +7,9 @@ import pytest
 import yaml
 from unittest.mock import MagicMock
 from io import StringIO
+import warnings
+import time
+from datetime import datetime
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper
@@ -19,6 +22,9 @@ from logging_system_display_python_api.messageHandler import messageHandler
 from database_python_api.database_control import DataBaseHandler
 from cmd_inter import cmd_inter
 from port_interface_api.file_read_api.file_listener import file_listener
+from server_message_handler import serverMessageHandler
+from server import serverHandler
+
 
 #TODO: elses on lock failure test
 
@@ -41,19 +47,19 @@ def test_init():
     table_structure = {'init_test_table': [['rowan', 0, 'int'], ['row2', 0, 'float'], ['row3', 0, 'string']]}
 
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
 
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
-    thread_handler.add_thread(dataBase.run, db_name, dataBase)
-    thread_handler.start()
+    task_handler.add_thread(dataBase.run, db_name, dataBase)
+    task_handler.start()
 
     try:
         test_sensor = sensor_parent(coms=coms, config={'tap_request': ['this', 'that'], 'publisher': 'no', 'interval_pub': 'NA'}, name='good_sensor', db_name=db_name, table_structure=table_structure,
                                     graphs=['one', 'two', 'three'])
 
-        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-        thread_handler.start()
+        task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        task_handler.start()
 
         ######################## Names set up correctly ##########################
         # valid names accepted
@@ -121,7 +127,7 @@ def test_init():
 
     finally:
         dataBase._DataBaseHandler__close_sql_connections()
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_get_set_taps():
@@ -249,8 +255,8 @@ def test_process_data():
 def test_get_data():
     # set up tap
     coms = messageHandler(destination='Local')
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
     receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': None, 'interval_pub': None}, name='receiver')
     receiver.set_up_taps()
     assert receiver.get_taps() == ['sender']
@@ -293,20 +299,20 @@ def test_get_data():
 @pytest.mark.sensor_parent_tests
 def test_make_data_tap():
     coms = messageHandler(destination='Local')
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
 
     source = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='source')
     tapper = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='tapper')
 
-    thread_handler.add_thread(source.run, source.get_sensor_name(), source)
-    thread_handler.add_thread(tapper.run, tapper.get_sensor_name(), tapper)
-    thread_handler.start()
+    task_handler.add_thread(source.run, source.get_sensor_name(), source)
+    task_handler.add_thread(tapper.run, tapper.get_sensor_name(), tapper)
+    task_handler.start()
 
     try:
         tapper.make_data_tap('source')
 
-        while thread_handler.check_request('source', 1) is False:
+        while task_handler.check_request('source', 1) is False:
             pass
         assert 'tapper' in source._sensor_parent__tap_subscribers
 
@@ -323,60 +329,98 @@ def test_make_data_tap():
             assert tapper._sensor_parent__name_lock.locked() == False
         coms.send_request.assert_not_called()
     finally:
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
-#TODO
+#NOTE: there are still a couple cases in the middle where it checks the data_buffer_overwrite lock that I don't have covered, but I think the first check should be enough
+# also there is the while loop that isn't covered but like. I don't want to. I could probably make another thread that can change the data_buffer_overwrite bool but that sounds like a lot of work ngl
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
 @pytest.mark.sensor_parent_tests
-def test_send_tap():
-    #things to test:
-    #   no data
-    #   some data
-    #   sender is in taps list
-    #   sender is not in taps list?
+def test_send_tap_not_read_from_file(capsys):
     coms = messageHandler(destination='Local')
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
 
     with open("main.yaml", "r") as file:
         config_data = yaml.safe_load(file)
     sensor_config_dict = config_data.get("sensor_config_dict", {})
     sensor_config.sensors_config = sensor_config_dict
 
-    temp = None
-    def process_data(*args, **kwargs):
-        temp = args[0]
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
+    test_sensor.process_data = MagicMock()
+    test_sensor.process_data.side_effect = print("process_data called") #this is necesarry, as the call count is not incremented when a func is called through coms
 
-    sensor_parent.process_data = MagicMock(side_effect=process_data)
-    # test_sensor = sobj_gps_board_aux(coms=coms)
-    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['source'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Justin')
-    test_sensor.process_data = MagicMock(side_effect=process_data)
-    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-    thread_handler.start()
+    task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    task_handler.start()
 
     try:
-        test_sensor.send_tap(data=[1, 2, 3], sender='source')
-        assert test_sensor._sensor_parent__data_buffer_overwrite == False
-        # assert that return val is something or other
-        # assert data in data_received list
-        # threadWrapper.set_event.assert_called()
-        assert test_sensor._sensor_parent__data_buffer_overwrite_lock.locked() == False
+        data = [1, 2, 3]
+        test_sensor.send_tap(data=data, sender='sender')
+        captured = capsys.readouterr()
+        assert test_sensor._sensor_parent__data_received['sender'] == data
+        assert captured.out == "process_data called\n"
         
-        # test_sensor.send_tap(data=[1, 2, 3], sender = 'sender')
-        # assert test_sensor._sensor_parent__data_buffer_overwrite == True
-        # assert test_sensor._sensor_parent__data_buffer_overwrite_lock.locked() == False
-        
-        #   not_ready_bool is equal to data_buffer_overwrite (DO WE NEED TO TEST THIS? NOT_READY IS AN INTERNAL SIGNAL)
-        #   lock is released
-        #   not quite sure how to test while loops
+        test_sensor.send_tap(data=[], sender = 'sender')
+        assert test_sensor._sensor_parent__data_received['sender'] == data
 
-        #   ensure event is set, meaning process data gets called
-        #   lock is released
+        #testing all instances of data_buffer_overwrite_lock
+        test_sensor._sensor_parent__data_buffer_overwrite_lock.acquire()
+        if test_sensor._sensor_parent__data_buffer_overwrite_lock.locked():
+            with pytest.raises(RuntimeError) as excinfo:
+                test_sensor.send_tap(data=[], sender = 'Little Justin')
 
-        #   failure to acquire data_buffer_overwrite_lock - I'm probably going to want to make a few threads to try and test the different places
-        #   in which it can fail
+            test_sensor._sensor_parent__data_buffer_overwrite_lock.release()
+            assert "Could not acquire data buffer overwrite lock." in str(excinfo.value)
+
+        test_sensor._sensor_parent__data_lock.acquire()
+        if test_sensor._sensor_parent__data_lock.locked():
+            with pytest.raises(RuntimeError) as excinfo:
+                test_sensor.send_tap(data=data, sender = 'Little Justin')
+
+            test_sensor._sensor_parent__data_lock.release()
+            assert "Could not acquire data lock" in str(excinfo.value)
 
     finally:
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+@pytest.mark.sensor_parent_tests
+def test_send_tap_read_from_file(capsys):
+    coms = messageHandler(destination='Local')
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
+
+    with open("main.yaml", "r") as file:
+        config_data = yaml.safe_load(file)
+    sensor_config_dict = config_data.get("sensor_config_dict", {})
+    sensor_config.sensors_config = sensor_config_dict
+
+    sensor_config.read_from_file = True
+    file_listener_obj = file_listener(coms, thread_name='file_listener', batch_size=1024, batch_collection_number_before_save=10, import_bin_path='')
+    task_handler.add_thread(file_listener_obj.run, 'file_listener', file_listener_obj)
+    sensor_config.file_listener_name = 'file_listener'
+    file_listener_obj._file_listener__logger.send_log = MagicMock()
+    
+    test_sensor = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
+    test_sensor.process_data = MagicMock()
+    test_sensor.process_data.side_effect = print("process_data called") #this is necesarry, as the call count is not incremented when a func is called through coms
+
+    task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    task_handler.start()
+
+    try:
+        data = [1, 2, 3]
+        test_sensor.send_tap(data=data, sender='sender')
+        captured = capsys.readouterr()
+        assert test_sensor._sensor_parent__data_received['sender'] == data
+        assert "process_data called" in captured.out
+        
+        #assuming the mark_started request is the first one made to the file listener
+        while task_handler.check_request('file_listener', 1) is False:
+            pass
+        file_listener_obj._file_listener__logger.send_log.assert_called_with("['sender'] started")
+
+    finally:
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_create_tap():
@@ -402,15 +446,15 @@ def test_create_tap():
 @pytest.mark.sensor_parent_tests
 def test_start_publisher():
     coms = messageHandler(destination='Local')
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
     test_sensor = sensor_parent(coms=coms, config={'tap_request': ['a'], 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='publisher_test')
 
-    thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-    thread_handler.start()
+    task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+    task_handler.start()
     test_sensor.start_publisher()
 
-    assert 'publisher for publisher_test' in thread_handler._taskHandler__threads
+    assert 'publisher for publisher_test' in task_handler._taskHandler__threads
 
     # test for failure to acquire lock
     test_sensor._sensor_parent__name_lock.acquire()
@@ -421,7 +465,7 @@ def test_start_publisher():
         assert "Could not acquire name lock" in str(excinfo.value)
     test_sensor._sensor_parent__name_lock.release()
 
-    thread_handler.kill_tasks()
+    task_handler.kill_tasks()
 
 #TODO: deal with active sensor - how do I break out of the while loop???
 @pytest.mark.sensor_parent_tests
@@ -429,37 +473,74 @@ def test_publish():
     good_data = ['abc', 'def', 'ghi']
     bad_data = [MagicMock]
 
-    sensor_parent.start_publisher = MagicMock()
+    coms = messageHandler(server_name='CSE_Server_Listener')
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(task_handler)
 
-    # ######################## Active sensor #######################
-    # active_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='active')
-    # active_test_sensor.set_up_taps()
+    # server_handler = serverMessageHandler(coms=coms)
+    # sensor_config.server = 'CSE_Server_Listener'
 
-    # active_test_sensor.set_publish_data(good_data)
-    # active_test_sensor.publish()
-    # assert active_test_sensor.get_last_published_data()['data'] == 'g , h , i'
+    #problem- thread never dies because it keeps looping or smth
 
-    # active_test_sensor.set_publish_data(bad_data)
-    # active_test_sensor.publish()
-    # assert active_test_sensor.get_last_published_data()['data'] == "Unable to convert last data to string for reporting, this should not effect performance of the publishing."
+    ######################## Active sensor #######################
+    active_test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'active', 'interval_pub': 1}, name='active')
+    hate = sensor_parent(coms=coms, config={'tap_request': ['active'], 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name = 'evil')
 
-    # # failure to acquire lock
-    # active_test_sensor._sensor_parent__last_published_data_lock.acquire()
-    # if (active_test_sensor._sensor_parent__last_published_data_lock.locked()):
-    #     with pytest.raises(RuntimeError) as excinfo:
-    #         active_test_sensor.publish()
+    active_test_sensor._sensor_parent__events[f'data_received_for_sender'] = active_test_sensor.publish()
+    task_handler.add_thread(active_test_sensor.run, active_test_sensor.get_sensor_name(), active_test_sensor)
+    task_handler.add_thread(hate.run, hate.get_sensor_name(), hate)
+    # task_handler.add_thread(server_handler.run, 'CSE_Server_Listener', server_handler)
+    task_handler.start()
+    
+    try:
+        active_test_sensor.set_up_taps()
+        hate.set_up_taps()
+
+        active_test_sensor.set_publish_data(data=good_data)
+        time.sleep(1.1)
+        print(f"\n\n{active_test_sensor.get_last_published_data()}")
+        # assert active_test_sensor.get_last_published_data()['data'] == 'g , h , i'
+        time_1 = active_test_sensor.get_last_published_data()['time']
+
+        #now we have to do something to make the other sensor ready for more data but idk how. I think we gotta process it
+        hate.save_data()
+
+        active_test_sensor.set_publish_data(data=bad_data)
+        time.sleep(1.1)
+        print(f"\n\n{active_test_sensor.get_last_published_data()}")
+        # assert active_test_sensor.get_last_published_data()['data'] == "Unable to convert last data to string for reporting, this should not effect performance of the publishing."
+        time_2 = active_test_sensor.get_last_published_data()['time']
+
+        # format = '%y-%m-%d %H:%M:%S.%f'
+        # print(f"\n\n{datetime.strptime(time_2, format) - datetime.strptime(time_1, format)}")
+    finally:
+        task_handler.kill_tasks()
+
+    # failure to acquire lock
+    active_test_sensor._sensor_parent__active__lock.acquire()
+    if (active_test_sensor._sensor_parent__active__lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            active_test_sensor.publish()
         
-    #     assert "Could not acquire published data lock" in str(excinfo.value)
-    # active_test_sensor._sensor_parent__last_published_data_lock.release()
+        assert "Could not acquire active lock" in str(excinfo.value)
+    active_test_sensor._sensor_parent__active__lock.release()
 
-    # # failure to acquire other lock
-    # active_test_sensor._sensor_parent__has_been_published_lock.acquire()
-    # if (active_test_sensor._sensor_parent__has_been_published_lock.locked()):
-    #     with pytest.raises(RuntimeError) as excinfo:
-    #         active_test_sensor.publish()
+    active_test_sensor._sensor_parent__last_published_data_lock.acquire()
+    if (active_test_sensor._sensor_parent__last_published_data_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            active_test_sensor.publish()
         
-    #     assert "Could not acquire has been published lock" in str(excinfo.value)
-    # active_test_sensor._sensor_parent__has_been_published_lock.release()
+        assert "Could not acquire published data lock" in str(excinfo.value)
+    active_test_sensor._sensor_parent__last_published_data_lock.release()
+
+    # failure to acquire other lock
+    active_test_sensor._sensor_parent__has_been_published_lock.acquire()
+    if (active_test_sensor._sensor_parent__has_been_published_lock.locked()):
+        with pytest.raises(RuntimeError) as excinfo:
+            active_test_sensor.publish()
+        
+        assert "Could not acquire has been published lock" in str(excinfo.value)
+    active_test_sensor._sensor_parent__has_been_published_lock.release()
 
     ####################### Passive sensor #######################
     passive_test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='passive')
@@ -494,15 +575,15 @@ def test_publish():
 @pytest.mark.sensor_parent_tests
 def test_send_data_to_tap():
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(task_handler)
 
     receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
     sender = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='sender')
 
-    thread_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
-    thread_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
-    thread_handler.start()
+    task_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
+    task_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
+    task_handler.start()
 
     try:
         data = ['abc', 'def']
@@ -517,20 +598,20 @@ def test_send_data_to_tap():
         
         assert receiver._sensor_parent__data_received['sender'] == data
     finally:
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_fail_send_data_to_tap():
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(task_handler)
 
     receiver = sensor_parent(coms=coms, config={'tap_request': ['sender'], 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='receiver')
     sender = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'yes', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='sender')
 
-    thread_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
-    thread_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
-    thread_handler.start()
+    task_handler.add_thread(receiver.run, receiver.get_sensor_name(), receiver)
+    task_handler.add_thread(sender.run, sender.get_sensor_name(), sender)
+    task_handler.start()
 
     try:
         data = ['abc', 'def']
@@ -565,7 +646,7 @@ def test_fail_send_data_to_tap():
             assert "Could not acquire tap requests lock" in str(excinfo.value)
         sender._sensor_parent__tap_requests_lock.release()
     finally:
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_set_check_publish():
@@ -657,25 +738,68 @@ def test_get_last_published_data():
     test_sensor._sensor_parent__last_published_data_lock.release()
 
 @pytest.mark.sensor_parent_tests
-def test_save_data():
-    #test if read_from_file is true
-    #plan: mock logger.send_log and assert called with f"{sensor_name} ended"
-
-    #test if read_from_file is false
+def test_save_data_read_from_file():
+    sensor_config.read_from_file = True
     table_structure = {'save_data_test_table': [['first', 0, 'int'], ['second', 0, 'float'], ['third', 0, 'string']]}
     
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
+
+    file_listener_obj = file_listener(coms, thread_name='file_listener', batch_size=1024, batch_collection_number_before_save=10, import_bin_path='')
+    task_handler.add_thread(file_listener_obj.run, 'file_listener', file_listener_obj)
+    sensor_config.file_listener_name = 'file_listener'
+    file_listener_obj._file_listener__logger.send_log = MagicMock()
 
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
-    thread_handler.add_thread(dataBase.run, db_name, dataBase)
-    thread_handler.start()
+    task_handler.add_thread(dataBase.run, db_name, dataBase)
+    task_handler.start()
 
     try:
         test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_data_test', db_name=db_name, table_structure=table_structure)
-        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-        thread_handler.start()
+        task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        task_handler.start()
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'create_table_external':
+                request_num = request[4]
+
+        while dataBase.check_request(request_num) is False:
+            pass
+
+        test_sensor.save_data(table='save_data_test_table', data={'first': [1], 'second': [0.5], 'third': ['x']})
+        
+        for request in dataBase._threadWrapper__request:
+            if request[0] == 'save_data_group':
+                request_num = request[4]
+        
+        while dataBase.check_request(request_num) is False:
+            pass
+        
+        assert '1,0.5,x' in dataBase.get_data(['save_data_test_table', 0])
+
+        file_listener_obj._file_listener__logger.send_log.assert_called_with("['save_data_testnot byte'] ended")
+    finally:
+        dataBase._DataBaseHandler__close_sql_connections()
+        task_handler.kill_tasks()
+
+@pytest.mark.sensor_parent_tests
+def test_save_data_not_read_from_file():
+    sensor_config.read_from_file = False
+    table_structure = {'save_data_test_table': [['first', 0, 'int'], ['second', 0, 'float'], ['third', 0, 'string']]}
+    
+    coms = messageHandler()
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
+
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    task_handler.add_thread(dataBase.run, db_name, dataBase)
+    task_handler.start()
+
+    try:
+        test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_data_test', db_name=db_name, table_structure=table_structure)
+        task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        task_handler.start()
         
         for request in dataBase._threadWrapper__request:
             if request[0] == 'create_table_external':
@@ -697,7 +821,7 @@ def test_save_data():
 
     finally:
         dataBase._DataBaseHandler__close_sql_connections()
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_save_byte_data_read_from_file():
@@ -706,22 +830,22 @@ def test_save_byte_data_read_from_file():
     table_structure = {'save_byte_data_test_table': [['first', 4, 'byte']]}
     
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
 
     file_listener_obj = file_listener(coms, thread_name='file_listener', batch_size=1024, batch_collection_number_before_save=10, import_bin_path='')
-    thread_handler.add_thread(file_listener_obj.run, 'file_listener', file_listener_obj)
+    task_handler.add_thread(file_listener_obj.run, 'file_listener', file_listener_obj)
     sensor_config.file_listener_name = 'file_listener'
     file_listener_obj._file_listener__logger.send_log = MagicMock()
 
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
-    thread_handler.add_thread(dataBase.run, db_name, dataBase)
-    thread_handler.start()
+    task_handler.add_thread(dataBase.run, db_name, dataBase)
+    task_handler.start()
 
     try:
         test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_byte_data_test', db_name=db_name, table_structure=table_structure)
-        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-        thread_handler.start()
+        task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        task_handler.start()
         
         for request in dataBase._threadWrapper__request:
             if request[0] == 'create_table_external':
@@ -741,25 +865,25 @@ def test_save_byte_data_read_from_file():
         file_listener_obj._file_listener__logger.send_log.assert_called_with("['save_byte_data_testbyte'] ended")
     finally:
         dataBase._DataBaseHandler__close_sql_connections()
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_save_byte_data_not_read_from_file():
-    #test if read_from_file is false
+    sensor_config.read_from_file = False
     table_structure = {'save_byte_data_test_table': [['first', 4, 'byte']]}
     
     coms = messageHandler()
-    thread_handler = taskHandler(coms=coms)
-    coms.set_thread_handler(threadHandler=thread_handler)
+    task_handler = taskHandler(coms=coms)
+    coms.set_thread_handler(threadHandler=task_handler)
 
     dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
-    thread_handler.add_thread(dataBase.run, db_name, dataBase)
-    thread_handler.start()
+    task_handler.add_thread(dataBase.run, db_name, dataBase)
+    task_handler.start()
 
     try:
         test_sensor = sensor_parent(coms=coms, config={'tap_request': None, 'publisher': 'no', 'interval_pub': 'NA'}, name='save_byte_data_test', db_name=db_name, table_structure=table_structure)
-        thread_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
-        thread_handler.start()
+        task_handler.add_thread(test_sensor.run, test_sensor.get_sensor_name(), test_sensor)
+        task_handler.start()
         
         for request in dataBase._threadWrapper__request:
             if request[0] == 'create_table_external':
@@ -778,7 +902,7 @@ def test_save_byte_data_not_read_from_file():
 
     finally:
         dataBase._DataBaseHandler__close_sql_connections()
-        thread_handler.kill_tasks()
+        task_handler.kill_tasks()
 
 @pytest.mark.sensor_parent_tests
 def test_preprocess_data():
@@ -788,14 +912,14 @@ def test_preprocess_data():
     
     # delimiter and terminator are binary, partial start packet, complete end packet
     data = [b'dangerous to go alone,\r\n$take this.\r\n']
-    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=0x24, terminator=0x0D0A)
+    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=b'$', terminator=b'\r\n')
     assert data == [b'dangerous to go alone,\r\n', b'take this.\r\n']
     assert partial_start == True
     assert partial_end == False
     
     # delimiter and terminator are ints, complete start packet, partial end packet
     data = [b'$To be, or not to be,\r\n$that is the']    
-    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=36, terminator=3338)
+    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=0x24, terminator=0x0D0A)
     assert data == [b'', b'To be, or not to be,\r\n', b'that is the']
     assert partial_start == True
     assert partial_end == True
