@@ -380,7 +380,7 @@ def test_send_tap():
 
 @pytest.mark.sensor_parent_tests
 def test_create_tap():
-    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Tim')
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Peter')
 
     test_sensor.create_tap([None, None])
     test_sensor.create_tap([MagicMock, 'subscriber_name'])
@@ -780,15 +780,99 @@ def test_save_byte_data_not_read_from_file():
         dataBase._DataBaseHandler__close_sql_connections()
         thread_handler.kill_tasks()
 
-#TODO
 @pytest.mark.sensor_parent_tests
 def test_preprocess_data():
-    pass
+    #NOTE: as the preprocess function is currently written, it works, but partial_start is never false; when it should be, the blank bytes object is treated as the partial start packet
 
-#TODO: this is going to be tricky
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='preprocess_test')
+    
+    # delimiter and terminator are binary, partial start packet, complete end packet
+    data = [b'dangerous to go alone,\r\n$take this.\r\n']
+    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=0x24, terminator=0x0D0A)
+    assert data == [b'dangerous to go alone,\r\n', b'take this.\r\n']
+    assert partial_start == True
+    assert partial_end == False
+    
+    # delimiter and terminator are ints, complete start packet, partial end packet
+    data = [b'$To be, or not to be,\r\n$that is the']    
+    data, partial_start, partial_end = test_sensor.preprocess_data(data=data, delimiter=36, terminator=3338)
+    assert data == [b'', b'To be, or not to be,\r\n', b'that is the']
+    assert partial_start == True
+    assert partial_end == True
+
+#potential issue: if the first packet is bad, it might not be recognized as a bad packet (does this matter too much? if all the packets are bad, it will look like we aren't getting anything, which would be bad.)
 @pytest.mark.sensor_parent_tests
-def test_preprocess_ccsds_data():
-    pass
+def test_preprocess_ccsds_data_good_packet():
+    sensor_config.sync_word_len = 4
+    sensor_config.ccsds_header_len = 5
+    sensor_config.sync_word = 0x352ef853
+    sensor_config.packet_len_addr1 = 8
+    sensor_config.packet_len_addr2 = 9
+
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Johnny')
+    
+    with open('sensor_interface_api/testing/sensor_test/good_test_packet.bin', 'rb+') as file:
+        data = [file.read()]
+    
+    if file is not None:
+        packets, bad_packets = test_sensor.preprocess_ccsds_data(data=data)
+        assert len(packets) == 1
+        assert bytes(packets[0]) in data[0]
+        assert bad_packets is False
+
+#TODO: fix files probably, maybe even just take out the second test
+@pytest.mark.sensor_parent_tests
+def test_preprocess_ccsds_data_incomplete_packets():
+    #first preprocess call
+    # incomplete start packet: one packet with enough header room, but no sync word
+    # good incomplete: one packet with enough header room, a good sync word, and incomplete packet
+
+    #second preprocess call
+    # another incomplete start, but this is just the end of the previous packet (make sure they get put back together)
+    # incomplete end packet: one packet with too little room for a full header
+    sensor_config.sync_word_len = 4
+    sensor_config.ccsds_header_len = 5
+    sensor_config.sync_word = 0x352ef853
+    sensor_config.packet_len_addr1 = 8
+    sensor_config.packet_len_addr2 = 9
+
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Josh')
+    
+    with open('sensor_interface_api/testing/sensor_test/incomplete_test_packet_1.bin', 'rb+') as file1:
+        with open('sensor_interface_api/testing/sensor_test/incomplete_test_packet_2.bin', 'rb+') as file2:
+            data1 = [file1.read()]
+            data2 = [file2.read()]
+            # full_data = [data1[0]].append(data2[0])
+    
+    if file1 is not None and file2 is not None:
+        packets1, bad_packets1 = test_sensor.preprocess_ccsds_data(data=data1)
+        packets2, bad_packets2 = test_sensor.preprocess_ccsds_data(data=data2)
+        
+        assert len(packets1) == 0
+        assert len(packets2) == 1
+        # assert bytes(packets2[0]) in full_data[0]
+        assert bytes(packets2[0]) in data2[0]
+        assert bad_packets1 is False
+        assert bad_packets2 is False
+
+@pytest.mark.sensor_parent_tests
+def test_preprocess_ccsds_data_bad_packet():
+    sensor_config.sync_word_len = 4
+    sensor_config.ccsds_header_len = 5
+    sensor_config.sync_word = 0x352ef853
+    sensor_config.packet_len_addr1 = 8
+    sensor_config.packet_len_addr2 = 9
+
+    test_sensor = sensor_parent(coms=None, config={'tap_request': None, 'publisher': 'no', 'passive_active': 'passive', 'interval_pub': 'NA'}, name='Todd')
+    
+    with open('sensor_interface_api/testing/sensor_test/bad_test_packet.bin', 'rb+') as file:
+        data = [file.read()]
+    
+    if file is not None:
+        packets, bad_packets = test_sensor.preprocess_ccsds_data(data=data)
+        assert len(packets) == 1
+        assert bytes(packets[0]) in data[0]
+        assert bad_packets is True
 
 @pytest.mark.sensor_parent_tests
 def test_int_to_bytes():
