@@ -69,7 +69,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__config_lock = threading.Lock()
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
-        self.__publish_data = []
         self.__taps = []
         self.__has_been_published  = True
         self.__has_been_published_lock = threading.Lock()
@@ -338,7 +337,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     try :
                         self.__last_published_data['data'] = ' , '.join(data_copy[-1])
                     except : # pylint: disable=w0702
-                        self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
+                        self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not affect performance of the publishing.'
                     self.__last_published_data_lock.release()
                 else :
                     raise RuntimeError("Could not acquire published data lock")
@@ -356,7 +355,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 try:
                     self.__last_published_data['data'] = ' , '.join(map(str,data_copy[-1]))
                 except : # pylint: disable=w0702
-                    self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
+                    self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not affect performance of the publishing.'
                 self.__last_published_data_lock.release()
             else : 
                 raise RuntimeError("Could not acquire last published data lock")
