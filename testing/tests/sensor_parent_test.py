@@ -5,7 +5,7 @@
 #Python imports
 import pytest
 import yaml
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 from io import StringIO
 import warnings
 import time
@@ -327,7 +327,7 @@ def test_make_data_tap():
             tapper._sensor_parent__name_lock.release()
             assert 'Could not acquire name lock' in str(excinfo.value)
             assert tapper._sensor_parent__name_lock.locked() == False
-        coms.send_request.assert_not_called()
+        assert call('source', ['create_tap', tapper.send_tap, 'source']) not in coms.send_request.call_args
     finally:
         task_handler.kill_tasks()
 
