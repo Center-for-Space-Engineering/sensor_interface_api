@@ -80,9 +80,9 @@ class sobj_TIP_L0_to_L1(sensor_parent):
                 case _:
                     buffer[key] = data[key]
 
-        for key in buffer:
-            self.__logger.send_log(f"{key}: {str(buffer[key])}")
+        # for key in buffer:
+            # self.__logger.send_log(f"{key}: {str(buffer[key])}")
 
-        self.__logger.send_log("------------------------------------")
+        # self.__logger.send_log("------------------------------------")
 
         sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)

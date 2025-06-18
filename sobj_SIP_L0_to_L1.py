@@ -66,7 +66,7 @@ class sobj_SIP_L0_to_L1(sensor_parent):
             'granule_index': [],
         }
 
-        self.__logger.send_log(f"data: {type(data)}")
+        # self.__logger.send_log(f"data: {type(data)}")
 
         for key in data:
             # self.__logger.send_log(f"key: {key}")
@@ -105,6 +105,6 @@ class sobj_SIP_L0_to_L1(sensor_parent):
         buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiS'], buffer['IQS'])]
         buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiS'], buffer['IQS'])]
 
-        self.__logger.send_log(str(buffer))
+        # self.__logger.send_log(str(buffer))
 
         sensor_parent.save_data(self, table = 'SIP_L1', data = buffer)

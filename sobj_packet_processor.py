@@ -32,9 +32,10 @@ class sobj_packet_processor(sensor_parent):
 
         self.__colms_list = [['temp', 0, 'uint'] for _ in range(self.__packet_config['Channels'])]
         if self.__name in sensor_config.time_correlation:
-            self.__colms_list.append(['PPS_UTC', 0, 'mysql_micro_datetime'])
-            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime'])
-            self.__colms_list.append(['PPSR_EPOCH', 0, 'mysql_milli_datetime'])
+            self.__colms_list.append(['PPS_UTC', 0, 'mysql_micro_datetime', 'nullable'])
+            self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime', 'nullable'])
+            # self.__colms_list.append(['PPSS_EPOCH', 0, 'mysql_micro_datetime', 'nullable'])
+            self.__colms_list.append(['PPSR_EPOCH', 0, 'mysql_milli_datetime', 'nullable'])
         self.__colms_list.append(['time_STM_CLK', 0, 'bigint'])
         self.__colms_list.append(['time_RTC', 0, 'uint'])
         self.__colms_list.append(['time_STM_CLK_UTC', 0, 'mysql_micro_datetime', "secondary_index"])
@@ -43,6 +44,14 @@ class sobj_packet_processor(sensor_parent):
         self.__colms_list.append(['packet_count', 0, 'uint'])
         self.__colms_list.append(['granule_index', 0, 'uint'])
         self.__unpacking_map = [0  for _ in range(self.__packet_config['Channels'])]
+
+        # Get length of PPSW and PPSM in bytes
+        if self.__name in sensor_config.time_correlation:
+            sensor_config.PPSS_len = int(self.__packet_config["granule definition"]["PPSS"]["Word Length (bits)"] / 8)
+            sensor_config.PPSR_len = int(self.__packet_config["granule definition"]["PPSR"]["Word Length (bits)"] / 8)
+            
+            sensor_config.PPSW_len = int(self.__packet_config["granule definition"]["PPSW"]["Word Length (bits)"] / 8)
+            sensor_config.PPSM_len = int(self.__packet_config["granule definition"]["PPSM"]["Word Length (bits)"] / 8)
 
         # Get length of PPSW and PPSM in bytes
         if self.__name in sensor_config.time_correlation:
@@ -94,6 +103,7 @@ class sobj_packet_processor(sensor_parent):
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
         self.__logger.send_log(f"Setup complete{self.__name}")
+        # self.__logger.send_log(f"Setup complete{self.__packet_nmemonic}")
     def process_data(self, _):
         '''
             This function gets called when one of the tap request gets any data. 
@@ -124,10 +134,11 @@ class sobj_packet_processor(sensor_parent):
                         #get PPS packet for the correct board
                         PPSS = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+4])
                         PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+3])
+                        PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+3])
 
                         gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2]) # Value is dubious
                         gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+4])
-                        self.__logger.send_log(f"{gps_week=}\t{gps_milli=}")
+                        # self.__logger.send_log(f"{gps_week=}\t{gps_milli=}")
 
                         if gps_week != 0 and gps_milli != 0:
                             leap_seconds = 18
@@ -142,7 +153,11 @@ class sobj_packet_processor(sensor_parent):
                         if (sensor_config.PPS_UTC != None):
                             sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
                             sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
+                            sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
+                            sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
 
+                            self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                            self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
                             self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
                             self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
                         else:
@@ -163,7 +178,7 @@ class sobj_packet_processor(sensor_parent):
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
                         if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
                             self.__buffer[self.__colms_list[i][0]][j] = 0
-                            self.__logger.send_log(f'Unpacking packet {self.__name} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
+                            # self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
                         else :
                             if self.__colms_list[i][2] == 'int' and temp[0] == 1:
                                 while len(temp) < 32:

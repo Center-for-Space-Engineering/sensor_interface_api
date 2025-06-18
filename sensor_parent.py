@@ -55,6 +55,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
     def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '', data_overwrite_exception:bool = True) -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
+        self.__logger = loggerCustom("logs/sensor_parent.txt")
         self.__coms = coms
         self.__status_lock = threading.Lock()
         self.__status = "Not Running"
@@ -161,7 +162,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else : 
             raise RuntimeError("Could not acquire html lock")
         return temp_token
-    def get__sensor_status(self):
+    def get_sensor_status(self):
         '''
             Returns the status of the sensor, it is up to the user to set this status, this function returns that status to the server. 
         '''
@@ -169,24 +170,25 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__status
             self.__status_lock.release()
         else : 
-            raise RuntimeError("Could not aquire status lock")
+            raise RuntimeError("Could not acquire status lock")
         return temp
     def set_sensor_status(self, status):
         '''
             User calls this function to set a status, must be Running, Error, Not running.
         '''
         if self.__status_lock.acquire(timeout=1): # pylint: disable=R1732
-            if status == 'Running':
+            if status.lower() =='running':
                 self.__status = status
-            elif status == 'Error':
+            elif status.lower() == 'error':
                 self.__status = status
-            elif status == 'Not running':
+            elif status.lower() == 'not running':
                 self.__status = status
             else :
+                self.__status_lock.release()
                 raise RuntimeError(f"{status} is not a valid status.")
             self.__status_lock.release()
         else :
-            raise RuntimeError("Could not aquire status lock")
+            raise RuntimeError("Could not acquire status lock")
     def set_thread_status(self, status):
         '''
             This function is for setting the threading status AKA your processing threads that get started. USE 'Running', 'Complete' or 'Error'.
@@ -202,6 +204,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
             thread. If you have large amounts of processing have this function create another thread and process the data on that. 
         '''
+        self.__logger.send_log('here')
         raise NotImplementedError("process_data Not implemented, should process that last data received (data is stored in the __data_received variable).")
     def get_data_received(self, tap_name):
         '''
@@ -229,7 +232,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else :
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request(name_of_class_to_make_tap, ['create_tap', self.send_tap, temp_name_token])
     def send_tap(self, data, sender):
         '''
@@ -263,6 +266,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
             self.__data_received[sender] = copy.deepcopy(data) #NOTE: This could make things really slow, depending on the data rate.
             threadWrapper.set_event(self, f'data_received_for_{sender}')
+            if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_started', sender])
             self.__data_lock.release()
         else :
             raise RuntimeError("Could not acquire data lock")          
@@ -302,7 +307,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__name
             self.__name_lock.release()
         else :
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         return temp
     def start_publisher(self):
         '''
@@ -504,6 +509,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2-> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
+        if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'not byte'])
     def save_byte_data(self, table, data):
         '''
             This function takes in a dict of data to save, but can contain byte data
@@ -514,6 +521,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     Example : table : arg1, arg2, arg3 -> save_data(table = 'table', data = {'arg1' : ['hello', 'hello'], 'arg2' : ['world', 'world']}]) 
         '''
         self.__coms.send_request(self.__db_name, ['save_byte_data', table, data, self.__name])
+        if sys_c.read_from_file:
+                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'byte'])
     def preprocess_data(self, data, delimiter:bytearray, terminator:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.
