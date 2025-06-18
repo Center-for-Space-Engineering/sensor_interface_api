@@ -26,7 +26,7 @@ class sobj_packet_processor(sensor_parent):
         self.__config['apid'] = self.__apid
         self.__name = self.__packet_nmemonic + self.__config['extention']
         self.__count = 0
-        self.__logger = logger(f'logs/{self.__packet_nmemonic}.txt')
+        self.__logger = logger(f'logs/{self.__name}.txt')
 
         self.__table_structure = {}
 
@@ -69,7 +69,7 @@ class sobj_packet_processor(sensor_parent):
                 converted = False
                 print(f"Warning convertion faild for apid {self.__apid} Error: {e}")
         if converted is True :
-            self.__table_structure[f"{self.__packet_config['Mnemonic']}"] = self.__colms_list
+            self.__table_structure[f"{self.__name}"] = self.__colms_list
 
         self.__buffer = {}
 
@@ -93,13 +93,14 @@ class sobj_packet_processor(sensor_parent):
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
-        self.__logger.send_log(f"Setup complete{self.__packet_nmemonic}")
+        self.__logger.send_log(f"Setup complete{self.__name}")
     def process_data(self, _):
         '''
             This function gets called when one of the tap request gets any data. 
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
+        self.__logger.send_log(f"Process data for {self.__name=} | {self.__config=}")
         data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
         buffer_dict_to_publish = {
         }
@@ -122,7 +123,7 @@ class sobj_packet_processor(sensor_parent):
                         # Updating PPS_UTC
                         #get PPS packet for the correct board
                         PPSS = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+4])
-                        PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.system_clock+sensor_config.PPSS_len+3])
+                        PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+3])
 
                         gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2]) # Value is dubious
                         gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+4])
@@ -139,12 +140,11 @@ class sobj_packet_processor(sensor_parent):
 
 
                         if (sensor_config.PPS_UTC != None):
-                            if (sensor_config.PPS_UTC >= datetime(2025, 2, 1, 0, 0, 0)):
-                                sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
-                                sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
+                            sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
+                            sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
 
-                                self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
-                                self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
+                            self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                            self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
                         else:
                             self.__buffer['PPSS_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
                             self.__buffer['PPSR_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
@@ -153,15 +153,17 @@ class sobj_packet_processor(sensor_parent):
                     self.__buffer['time_STM_CLK_UTC'][j] = self.to_UTC(sys_clk_ms, is_RTC=False).strftime('%Y-%m-%d %H:%M:%-S.%f')
                     self.__buffer['time_RTC_UTC'][j] = self.to_UTC(real_time_clk, is_RTC=True).strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
                     self.__buffer['received_at'][j] = datetime.now(timezone.utc).timestamp()
+
                     # self.__logger.send_log(f"Clocks updated to UTC at time {datetime.fromtimestamp(self.__buffer['received_at'][j])}")
                     self.__buffer['packet_count'][j] = packet_count
                     sys_clk_ms = int((1/(self.__packet_config['G. Rate'])) * 1000) + sys_clk_ms if self.__packet_config['G. Rate'] != 0 else sys_clk_ms # system clock is in milliseconds
+
                     for i in range(len(self.__unpacking_map)): # pylint: disable=C0200
                         # print(f"APID: {self.__apid}\tPacket length: {len(packet)}\tPacket length bits: {len(packet_bits)}\tcolmslist curr: {self.__colms_list[i]}\t cur_position: {cur_position_bits}\tcurpostiion+unpacking: {cur_position_bits+self.__unpacking_map[i]}")
                         temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
                         if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
                             self.__buffer[self.__colms_list[i][0]][j] = 0
-                            self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
+                            self.__logger.send_log(f'Unpacking packet {self.__name} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
                         else :
                             if self.__colms_list[i][2] == 'int' and temp[0] == 1:
                                 while len(temp) < 32:
@@ -173,7 +175,7 @@ class sobj_packet_processor(sensor_parent):
 
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
-                sensor_parent.save_data(self, table=f"{self.__packet_nmemonic}", data=buf_copy)
+                sensor_parent.save_data(self, table=f"{self.__name}", data=buf_copy)
 
                 #lets save the data into a dictionary
                 all_keys_set = set(self.__buffer.keys()).union(buffer_dict_to_publish.keys())
