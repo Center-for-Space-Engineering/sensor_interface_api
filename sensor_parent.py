@@ -69,7 +69,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__config_lock = threading.Lock()
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
-        self.__publish_data = []
         self.__taps = []
         self.__has_been_published  = True
         self.__has_been_published_lock = threading.Lock()
@@ -78,11 +77,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__data_buffer_overwrite_lock = threading.Lock()
         self.__data_overwrite_exception = data_overwrite_exception
         #check to make sure the name is a valid name
-        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the patter for valid file names. 
+        pattern = r'^[a-zA-Z0-9_.-]+$' # this is the pattern for valid file names. 
         if bool(re.match(pattern, name)):
             self.__name = name
         else :
-            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the stander file format. Please change the name.')
+            raise RuntimeError(f'The name {name}, is not a valid sensor name because it does not match the standard file format. Please change the name.')
         # self.__logger = loggerCustom(f"logs/sensor_parent_{self.__name}.txt")
         self.__events = events_dict
         self.__active = False
@@ -130,7 +129,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__html_file_path = f'templates/{self.__name}.html'
         # we probably dont need this, but we might one day and I dont want to 
         # debug it if we do
-        self.__html__lock = threading.Lock()
+        self.__html_lock = threading.Lock()
         ##########################################################################
         ################## initialize byte array for incomplete packets ##########
         self.__extra_packet_data = bytearray()
@@ -156,9 +155,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
             Returns an file path to an html file.
         '''
-        if self.__html__lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__html_lock.acquire(timeout=1): # pylint: disable=R1732
             temp_token = self.generate_html_file(self.__html_file_path)
-            self.__html__lock.release()
+            self.__html_lock.release()
         else : 
             raise RuntimeError("Could not acquire html lock")
         return temp_token
@@ -204,7 +203,6 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             This function gets called when the data_received event happens. NOTE: It should be short, because it holds up this whole
             thread. If you have large amounts of processing have this function create another thread and process the data on that. 
         '''
-        self.__logger.send_log('here')
         raise NotImplementedError("process_data Not implemented, should process that last data received (data is stored in the __data_received variable).")
     def get_data_received(self, tap_name):
         '''
@@ -218,7 +216,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             self.__data_buffer_overwrite_lock.release()
         else :
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
-        if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
+        if self.__data_lock.acquire(timeout=5): # pylint: disable=R1732
             data_copy = copy.deepcopy(self.__data_received[tap_name])
             self.__data_lock.release()
         else : 
@@ -279,7 +277,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp = self.__taps
             self.__taps_lock.release()
         else :
-            raise RuntimeError("Could not aquire taps lock")
+            raise RuntimeError("Could not acquire taps lock")
         return temp
     def create_tap(self, args):
         '''
@@ -317,7 +315,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             temp_name_token = self.__name
             self.__name_lock.release()
         else : 
-            raise RuntimeError("Could not aquire name lock")
+            raise RuntimeError("Could not acquire name lock")
         self.__coms.send_request('task_handler', ['add_thread_request_func', self.publish, f'publisher for {temp_name_token}', self])
     def publish(self): # pylint: disable=R0915
         '''
@@ -339,7 +337,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                     try :
                         self.__last_published_data['data'] = ' , '.join(data_copy[-1])
                     except : # pylint: disable=w0702
-                        self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
+                        self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not affect performance of the publishing.'
                     self.__last_published_data_lock.release()
                 else :
                     raise RuntimeError("Could not acquire published data lock")
@@ -357,7 +355,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 try:
                     self.__last_published_data['data'] = ' , '.join(map(str,data_copy[-1]))
                 except : # pylint: disable=w0702
-                    self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not effect performance of the publishing.'
+                    self.__last_published_data['data'] = 'Unable to convert last data to string for reporting, this should not affect performance of the publishing.'
                 self.__last_published_data_lock.release()
             else : 
                 raise RuntimeError("Could not acquire last published data lock")
@@ -386,13 +384,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             raise RuntimeError('Could not acquire config lock')
 
         i = 0
-
         for subscriber in config_copy_subscribers: #loop on copies
             temp  = copy.deepcopy(data_copy) #The reason I copy that data again is so that every subscriber gets its own copy of the data it can manipulate.
 
             is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
             is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
-
             while is_ready is not True:
                 time.sleep(0.01)
                 is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
@@ -400,14 +396,13 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 if not is_ready:
                     is_ready_req_id = self.__coms.send_request(subscriber, ['ready_for_data'])
                     is_ready = self.__coms.get_return(subscriber, is_ready_req_id)
-
             if is_ready:
                 if self.__tap_requests_lock.acquire(timeout=10): # pylint: disable=R1732
                     self.__tap_requests[i](temp, self.get_sensor_name()) # call the get sensor name so that the data is mutex protected.
                     i += 1
                     self.__tap_requests_lock.release()
                 else : 
-                    raise RuntimeError('Couald not acquire tap requests lock')
+                    raise RuntimeError('Could not acquire tap requests lock')
         return data_copy      
     def set_publish_data(self, data):
         '''
