@@ -2,21 +2,19 @@
     This module is for converting parsed TAM packets (L0 data) up to L1 data. 
 '''
 
-import copy
-import datetime
-
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
-from logging_system_display_python_api.DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
 from logging_system_display_python_api.logger import loggerCustom as logger
 
 class sobj_TAM_L0_to_L1_converter(sensor_parent):
+    '''
+        raises TAM from L0 to L1
+    '''
     def __init__(self, coms):
         self.__name = 'TAM_L0_to_L1_converter'
         self.__config = sensor_config.sensors_config[self.__name]
         self.__coms = coms
-        self.__data_received = []
-        self.__logger = logger(f'logs/{self.__name}.txt')
+        self.__logger = logger(f'logs/{self.__name}.txt') # pylint: disable=W0238
 
         self.__table_structure = {
              'TAM_L1' : [ ['MBX', 0, 'float'], 
@@ -37,7 +35,7 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
 
         # conversion constants
         self.__CycleCounts = 200
-        self.__TAMGain = (0.3671*self.__CycleCounts + 1.5)
+        self.__TAMGain = 0.3671*self.__CycleCounts + 1.5
         self.__sign_bit = 1 << (23) # 24 bit numbers
 
     def process_data(self, _):

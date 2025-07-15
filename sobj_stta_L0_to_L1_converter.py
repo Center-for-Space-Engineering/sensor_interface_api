@@ -18,7 +18,7 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
         self.__name = 'stta_L0_to_L1_converter'
         self.__config = sensor_config.sensors_config[self.__name]
         self.__coms = coms
-        self.__logger = logger(f'logs/{self.__name}.txt')
+        self.__logger = logger(f'logs/{self.__name}.txt') # pylint: disable=W0238
 
         self.__table_structure = {
              'STTA_L1' : [ ['PPSW', 0, 'uint'],
@@ -80,7 +80,7 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
         self.__FSR = 2.048
         self.__LSB = (self.__FSR*2) / (65536)
         self.__current_gain = 4.99
-        self.__sign_bit = 1 << (15) # 16 bit numbers
+        # self.__sign_bit = 1 << (15) # 16 bit numbers
 
     def process_data(self, _):
         '''
@@ -192,4 +192,4 @@ class sobj_stta_L0_to_L1_converter(sensor_parent):
         buf_copy = copy.deepcopy(buffer)
         # self.__logger.send_log(f"buffer: {buffer}\n\n")
         sensor_parent.save_data(self, table='STTA_L1', data=buf_copy)
-        pass
+        

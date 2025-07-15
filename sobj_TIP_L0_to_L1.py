@@ -2,21 +2,19 @@
     This module is for converting parsed TIP packets (L0 data) up to L1 data. 
 '''
 
-import copy
-import datetime
-import math
-
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
-from logging_system_display_python_api.DTOs.print_message_dto import print_message_dto # pylint: disable=e0401
 from logging_system_display_python_api.logger import loggerCustom as logger
 
 class sobj_TIP_L0_to_L1(sensor_parent):
+    '''
+        Raises TIP from L0 to L1
+    '''
     def __init__(self, coms):
         self.__name = 'TIP_L0_to_L1'
         self.__config = sensor_config.sensors_config[self.__name]
         self.__coms = coms
-        self.__logger = logger(f'logs/{self.__name}.txt')
+        self.__logger = logger(f'logs/{self.__name}.txt') # pylint: disable=W0238
 
         self.__table_structure = {
              'TIP_L1' : [ ['TFQ', 0, 'float'], 
@@ -35,7 +33,7 @@ class sobj_TIP_L0_to_L1(sensor_parent):
         sensor_parent.set_sensor_status(self, 'Running')
 
         # conversion constants
-        self.__CycleCounts = 200
+        # self.__CycleCounts = 200
         self.__TIP_ts = 1/80e6
         self.__TIP_N = 24
         self.__TIP_freq_Gain = 1/1e6

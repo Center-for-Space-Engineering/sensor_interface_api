@@ -1,13 +1,15 @@
 '''
     Unit test for collect_sensor
 '''
+# pylint: disable=C0116
+# pylint: disable=W0212
+
 # Python imports
 import pytest
 import os
 import yaml
 from io import StringIO
 from unittest import mock
-from unittest.mock import MagicMock
 
 # Custom imports
 import system_constants as sensor_config
@@ -18,18 +20,18 @@ from threading_python_api.taskHandler import taskHandler
 @pytest.mark.collect_sensor_tests
 #Test for successfully reading a yaml file
 def test_success_importing_yaml():
-        file_path = "sensor_interface_api/testing/sensor_test/collect_sensor_test.yaml"
+    file_path = "sensor_interface_api/testing/sensor_test/collect_sensor_test.yaml"
 
-        #make a test instance of collect_sensor with test file path
-        sensor_importer([file_path], [], [], '')
+    #make a test instance of collect_sensor with test file path
+    sensor_importer([file_path], [], [], '')
 
-        assert sensor_config.valid_apids[file_path] == ['040']
-        assert sensor_config.telemetry_packet_types[file_path] == [('STTA', '040', 0)]
-        assert sensor_config.telemetry_packet_num[file_path] == 1
+    assert sensor_config.valid_apids[file_path] == ['040']
+    assert sensor_config.telemetry_packet_types[file_path] == [('STTA', '040', 0)]
+    assert sensor_config.telemetry_packet_num[file_path] == 1
 
 
 # Test for throwing an error on a bad yaml file
-# TODO: check with Shawn and make sure the original code is actually working-
+# NOTE: check with Shawn and make sure the original code is actually working-
 #       it doesn't print "error reading yaml," just moves on and hits a different error
 #       I might also need to rewrite the test for a yamlerror that won't error out later
 @pytest.mark.collect_sensor_tests

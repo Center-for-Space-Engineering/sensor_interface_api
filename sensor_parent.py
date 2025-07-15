@@ -55,7 +55,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
     def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '', data_overwrite_exception:bool = True) -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
-        self.__logger = loggerCustom("logs/sensor_parent.txt")
+        self.__logger = loggerCustom("logs/sensor_parent.txt") # pylint: disable=W0238
         self.__coms = coms
         self.__status_lock = threading.Lock()
         self.__status = "Not Running"
@@ -66,7 +66,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__tap_subscribers = []
         self.__tap_subscribers_lock = threading.Lock()
         self.__config = config
-        self.__config_lock = threading.Lock()
+        # self.__config_lock = threading.Lock()
         self.__publish_data = []
         self.__publish_data_lock = threading.Lock()
         self.__taps = []
@@ -75,7 +75,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         self.__name_lock = threading.Lock()
         self.__data_buffer_overwrite = False
         self.__data_buffer_overwrite_lock = threading.Lock()
-        self.__data_overwrite_exception = data_overwrite_exception
+        self.__data_overwrite_exception = data_overwrite_exception # pylint: disable=W0238
         #check to make sure the name is a valid name
         pattern = r'^[a-zA-Z0-9_.-]+$' # this is the pattern for valid file names. 
         if bool(re.match(pattern, name)):
@@ -194,6 +194,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
         threadWrapper.set_status(self, status)
     def ready_for_data(self):
+        '''
+            returns if the buffer is ready for data    
+        '''
         if self.__data_buffer_overwrite:
             return False
         else:
@@ -253,7 +256,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else :
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
         
-        while not_ready_bool == True:
+        while not_ready_bool:
             if self.__data_buffer_overwrite_lock.acquire(timeout=5): # pylint: disable=R1732
                 not_ready_bool = self.__data_buffer_overwrite
                 self.__data_buffer_overwrite_lock.release()
@@ -286,7 +289,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
                 args[0] : tab function to call.  
                 args[1] : name of subscriber.  
         '''
-        if args[0] != None:
+        if args[0] is not None:
             if self.__tap_requests_lock.acquire(timeout=1): # pylint: disable=R1732
                 self.__tap_requests.append(args[0])
                 self.__tap_requests_lock.release()
@@ -505,7 +508,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
         self.__coms.send_request(self.__db_name, ['save_data_group', table, data, self.__name])
         if sys_c.read_from_file:
-                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'not byte'])
+            self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'not byte'])
     def save_byte_data(self, table, data):
         '''
             This function takes in a dict of data to save, but can contain byte data
@@ -517,7 +520,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         '''
         self.__coms.send_request(self.__db_name, ['save_byte_data', table, data, self.__name])
         if sys_c.read_from_file:
-                self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'byte'])
+            self.__coms.send_request(sys_c.file_listener_name, ['mark_ended', self.__name + 'byte'])
     def preprocess_data(self, data, delimiter:bytearray, terminator:bytearray):
         '''
             This function will go through your data and find the delimiter you gave the function, and then put messages together.

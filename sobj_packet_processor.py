@@ -4,7 +4,6 @@
 import copy
 from bitarray import bitarray
 from datetime import datetime, timedelta, timezone
-import sys
 
 from sensor_interface_api.sensor_parent import sensor_parent # pylint: disable=e0401
 import system_constants as sensor_config # pylint: disable=e0401
@@ -25,7 +24,7 @@ class sobj_packet_processor(sensor_parent):
         self.__config = sensor_config.sensors_config[self.__name]
         self.__config['apid'] = self.__apid
         self.__name = self.__packet_nmemonic + self.__config['extention']
-        self.__count = 0
+        # self.__count = 0
         self.__logger = logger(f'logs/{self.__name}.txt')
 
         self.__table_structure = {}
@@ -150,11 +149,11 @@ class sobj_packet_processor(sensor_parent):
                             sensor_config.PPS_UTC = None
 
 
-                        if (sensor_config.PPS_UTC != None):
-                            sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
-                            sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
-                            sensor_config.PPSS_epoch = (sensor_config.PPS_UTC - timedelta(milliseconds=PPSS))
-                            sensor_config.PPSR_epoch = (sensor_config.PPS_UTC - timedelta(seconds=PPSR))
+                        if sensor_config.PPS_UTC is not None:
+                            sensor_config.PPSS_epoch = sensor_config.PPS_UTC - timedelta(milliseconds=PPSS)
+                            sensor_config.PPSR_epoch = sensor_config.PPS_UTC - timedelta(seconds=PPSR)
+                            sensor_config.PPSS_epoch = sensor_config.PPS_UTC - timedelta(milliseconds=PPSS)
+                            sensor_config.PPSR_epoch = sensor_config.PPS_UTC - timedelta(seconds=PPSR)
 
                             self.__buffer['PPSS_EPOCH'][j] = sensor_config.PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
                             self.__buffer['PPSR_EPOCH'][j] = sensor_config.PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
@@ -222,10 +221,9 @@ class sobj_packet_processor(sensor_parent):
 
             returned obj is datetime obj
         '''
-        if (is_RTC):
+        if is_RTC:
             new_datetime = (sensor_config.PPSR_epoch) + timedelta(seconds=gps_clock)
             return  new_datetime
         else:
             new_datetime = (sensor_config.PPSS_epoch) + timedelta(milliseconds=gps_clock)
             return new_datetime              
-        

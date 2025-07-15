@@ -19,7 +19,7 @@ class sobj_gps_board_aux(sensor_parent):
         self.__serial_line_two_data = []
         self.__data_lock = threading.Lock()
         self.__coms = coms
-        self.__packet_number = 0
+        # self.__packet_number = 0
         self.__packet_number_lock = threading.Lock()
 
 
@@ -69,7 +69,7 @@ class sobj_gps_board_aux(sensor_parent):
         packet_terminator = '\r\n'
 
         processed_packets = 0
-        processed_packets_list = []
+        # processed_packets_list = []
         day_list = []
         hour_list = []
         minute_list = []
@@ -107,7 +107,7 @@ class sobj_gps_board_aux(sensor_parent):
                     week_list.append(results[0])
                 
                     if self.__packet_number_lock.acquire(timeout=10):
-                        self.__packet_number+=1
+                        # self.__packet_number+=1
                         self.__packet_number_lock.release()
                     else :
                         raise RuntimeError('Could not acquire packet number lock')
@@ -157,7 +157,7 @@ class sobj_gps_board_aux(sensor_parent):
         '''
             Get the gps data from UTC time.
         '''
-        secsInWeek = 604800
+        # secsInWeek = 604800
         secsInDay = 86400
         gpsEpoch = datetime.datetime(1980, 1, 6, 0, 0, 0)
 

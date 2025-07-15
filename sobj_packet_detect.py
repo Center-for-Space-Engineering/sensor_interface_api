@@ -36,8 +36,8 @@ class sobj_packet_detect(sensor_parent):
 
         self.__start_time = datetime.now()
 
-        self.__logger = logger(f'logs/{self.__name}.txt')
-        self.__logger_lock = threading.Lock()
+        self.__logger = logger(f'logs/{self.__name}.txt') # pylint: disable=W0238
+        # self.__logger_lock = threading.Lock()
 
 
         # the structure here is a dict where the key is the name of the table you want to make and the value is a list of list that has your row information on each sub index.
@@ -106,7 +106,7 @@ class sobj_packet_detect(sensor_parent):
             data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
             self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [copy.deepcopy(self.__serial_line_two_data[:data_ready_for_processing]), event, apids, telemetry_packets_copy]]) #start a thread to process data 
             self.__serial_line_two_data = self.__serial_line_two_data[data_ready_for_processing:]
-    def process_count_packets(self, temp_data_structure, event, apids, telemetry_packets_copy):
+    def process_count_packets(self, temp_data_structure, _, apids, telemetry_packets_copy):
         '''
             This function rips apart telemetry packets and counts how many of each type there is.  
         '''
