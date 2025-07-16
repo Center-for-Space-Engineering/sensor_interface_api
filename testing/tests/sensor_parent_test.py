@@ -10,6 +10,7 @@ from io import StringIO
 import warnings
 import time
 from datetime import datetime
+import os
 
 #Custom imports
 from threading_python_api.threadWrapper import threadWrapper
@@ -29,6 +30,8 @@ from server import serverHandler
 #TODO: elses on lock failure test
 
 db_name = 'unit_tests_sensor_parent'
+db_username = os.getenv('DB_USERNAME')
+db_password = os.getenv('DB_PASSWORD')
 
 '''
     Before running this test, you need to make sure that you have created a mysql database called
@@ -50,7 +53,7 @@ def test_init():
     task_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=task_handler)
 
-    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user=db_username, password=db_password, clear_database=True)
     task_handler.add_thread(dataBase.run, db_name, dataBase)
     task_handler.start()
 
@@ -749,7 +752,7 @@ def test_save_data_read_from_file():
     sensor_config.file_listener_name = 'file_listener'
     file_listener_obj._file_listener__logger.send_log = MagicMock()
 
-    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user=db_username, password=db_password, clear_database=True)
     task_handler.add_thread(dataBase.run, db_name, dataBase)
     task_handler.start()
 
@@ -790,7 +793,7 @@ def test_save_data_not_read_from_file():
     task_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=task_handler)
 
-    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user=db_username, password=db_password, clear_database=True)
     task_handler.add_thread(dataBase.run, db_name, dataBase)
     task_handler.start()
 
@@ -836,7 +839,7 @@ def test_save_byte_data_read_from_file():
     sensor_config.file_listener_name = 'file_listener'
     file_listener_obj._file_listener__logger.send_log = MagicMock()
 
-    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user=db_username, password=db_password, clear_database=True)
     task_handler.add_thread(dataBase.run, db_name, dataBase)
     task_handler.start()
 
@@ -874,7 +877,7 @@ def test_save_byte_data_not_read_from_file():
     task_handler = taskHandler(coms=coms)
     coms.set_thread_handler(threadHandler=task_handler)
 
-    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user='ground_cse', password='usuCSEgs', clear_database=True)
+    dataBase = DataBaseHandler(coms=coms, db_name=db_name, user=db_username, password=db_password, clear_database=True)
     task_handler.add_thread(dataBase.run, db_name, dataBase)
     task_handler.start()
 
