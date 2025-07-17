@@ -153,9 +153,9 @@ class sobj_packet_processor(sensor_parent):
                             PPSS_epoch = newPPS_UTC- timedelta(milliseconds=PPSS)
                             PPSR_epoch = newPPS_UTC- timedelta(seconds=PPSR)
 
-                            sensor_config.PPS_UTC = newPPS_UTC
-                            sensor_config.PPSS_epoch = PPSS_epoch
-                            sensor_config.PPSR_epoch = PPSR_epoch
+                            # sensor_config.PPS_UTC = newPPS_UTC
+                            # sensor_config.PPSS_epoch = PPSS_epoch
+                            # sensor_config.PPSR_epoch = PPSR_epoch
 
                             self.__buffer['PPS_UTC'][j] = newPPS_UTC.strftime('%Y-%m-%d %H:%M:%-S.%f')
                             self.__buffer['PPSS_EPOCH'][j] = PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
@@ -178,14 +178,15 @@ class sobj_packet_processor(sensor_parent):
                             self.__buffer['PPSS_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
                             self.__buffer['PPSR_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
 
-                            sensor_config.PPS_UTC = None
+                            # sensor_config.PPS_UTC = None
 
                     # Update UTC times        
                     # self.__buffer['time_STM_CLK_UTC'][j] = self.to_UTC(granule_sys_clk_ms, is_RTC=False).strftime('%Y-%m-%d %H:%M:%-S.%f')
                     # self.__buffer['time_RTC_UTC'][j] = self.to_UTC(granule_real_time_clk_s, is_RTC=True).strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
-                    granule_utc_datetime = self.utc_from_clks(granule_sys_clk_ms, granule_real_time_clk_s)
-                    self.__buffer['time_STM_CLK_UTC'][j] = granule_utc_datetime.strftime('%Y-%m-%d %H:%M:%-S.%f') if not granule_utc_datetime is None else None
-                    self.__buffer['time_RTC_UTC'][j] = granule_utc_datetime.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3] if not granule_utc_datetime is None else None
+                    # granule_system_clk_utc, granule_real_time_clk_utc = self.utcs_from_clks(granule_sys_clk_ms, granule_real_time_clk_s)
+                    graunule_system_clk_utc, graunule_real_time_clk_utc = self.utcs_from_clks(granule_sys_clk_ms, granule_real_time_clk_s)
+                    self.__buffer['time_STM_CLK_UTC'][j] = graunule_system_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                    self.__buffer['time_RTC_UTC'][j] = graunule_real_time_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
                     self.__buffer['received_at'][j] = datetime.now(timezone.utc).timestamp()
 
                     # self.__logger.send_log(f"Clocks updated to UTC at time {datetime.fromtimestamp(self.__buffer['received_at'][j])}")
@@ -208,7 +209,7 @@ class sobj_packet_processor(sensor_parent):
 
                 # save to db and publish 
                 buf_copy = copy.deepcopy(self.__buffer)
-                sensor_parent.save_data(self, table=self.__config['extention'], data=buf_copy)
+                sensor_parent.save_data(self, table=f"{self.__name}", data=buf_copy)
 
                 #lets save the data into a dictionary
                 all_keys_set = set(self.__buffer.keys()).union(buffer_dict_to_publish.keys())
@@ -234,20 +235,20 @@ class sobj_packet_processor(sensor_parent):
             result = (result << 1) | bit
         return result
 
-    def to_UTC(self, gps_clock, is_RTC):
-        '''
-            converts given time into utc time
+    # def to_UTC(self, gps_clock, is_RTC):
+    #     '''
+    #         converts given time into utc time
 
-            returned obj is datetime obj
-        '''
-        if is_RTC:
-            new_datetime = (sensor_config.PPSR_epoch) + timedelta(seconds=gps_clock)
-            return  new_datetime
-        else:
-            new_datetime = (sensor_config.PPSS_epoch) + timedelta(milliseconds=gps_clock)
-            return new_datetime
+    #         returned obj is datetime obj
+    #     '''
+    #     if is_RTC:
+    #         new_datetime = (sensor_config.PPSR_epoch) + timedelta(seconds=gps_clock)
+    #         return  new_datetime
+    #     else:
+    #         new_datetime = (sensor_config.PPSS_epoch) + timedelta(milliseconds=gps_clock)
+    #         return new_datetime
         
-    def utc_from_clks(self, system_clk_ms: int, real_time_clk_s: int) -> Optional[datetime]:
+    def utcs_from_clks(self, system_clk_ms: int, real_time_clk_s: int) -> tuple[datetime, datetime]:
         '''
             Returns the absolute UTC datetime given the system and real-time clocks.
             This is accomplished by first looking up the most recent time correlation entry before or at the time of these clock values (ordered by real-time and then system clock values).
@@ -262,18 +263,24 @@ class sobj_packet_processor(sensor_parent):
             key=lambda e: (e['PPSR'], e['PPSS']) \
         ) - 1
         if i not in range(len(sensor_config.time_correlation_tables[self.__config['extention']])):
-            # return datetime.fromtimestamp(0)
-            return None
+            return datetime.fromtimestamp(0), datetime.fromtimestamp(0)
+            # return None
 
         time_correlation_table_entry = sensor_config.time_correlation_tables[self.__config['extention']][i]
         baseUTCdatetime: datetime = time_correlation_table_entry['PPS_UTC']
+
         system_clk_delta_ms = system_clk_ms - time_correlation_table_entry['PPSS']
         real_time_clk_delta_s = real_time_clk_s - time_correlation_table_entry['PPSR']
 
-        # If the system clock delta doesn't make sense or conflicts with the real-time clock delta, prefer the latter.
-        if system_clk_delta_ms < 0 or system_clk_delta_ms > real_time_clk_s * 1000:
-            return baseUTCdatetime + timedelta(seconds=real_time_clk_delta_s)
+        system_clk_utc = baseUTCdatetime + timedelta(milliseconds=system_clk_delta_ms)
+        real_time_clk_utc = baseUTCdatetime + timedelta(seconds=real_time_clk_delta_s)
+
+        return system_clk_utc, real_time_clk_utc
+
+        # # If the system clock delta doesn't make sense or conflicts with the real-time clock delta, prefer the latter.
+        # if system_clk_delta_ms < 0 or system_clk_delta_ms > real_time_clk_s * 1000:
+        #     return baseUTCdatetime + timedelta(seconds=real_time_clk_delta_s)
         
-        # Otherwise, use the system clock delta for more accuracy
-        return baseUTCdatetime + timedelta(milliseconds=system_clk_delta_ms)
+        # # Otherwise, use the system clock delta for more accuracy
+        # return baseUTCdatetime + timedelta(milliseconds=system_clk_delta_ms)
 
