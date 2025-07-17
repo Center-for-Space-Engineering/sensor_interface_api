@@ -100,6 +100,9 @@ class sobj_packet_processor(sensor_parent):
         self.__buffer["packet_count"] = [bytearray(sensor_config.packet_count) for _ in range(self.__packet_config['Granule count'])]
         self.__buffer["granule_index"] = [j for j in range(self.__packet_config['Granule count'])]
 
+        if self.__config['extention'] not in sensor_config.time_correlation_tables:
+            sensor_config.time_correlation_tables[self.__config['extention']] = []
+
         # NOTE: if you change the table_structure, you need to clear the database/dataTypes.dtobj and database/dataTypes_backup.dtobj DO NOT delete the file, just delete everything in side the file.
         sensor_parent.__init__(self, coms=self.__coms, config= self.__config, name=self.__name, max_data_points=100, db_name = sensor_config.database_name, table_structure=self.__table_structure)
         sensor_parent.set_sensor_status(self, 'Running')
@@ -168,9 +171,6 @@ class sobj_packet_processor(sensor_parent):
                                 # 'PPSS_EPOCH' : PPSS_epoch,
                                 # 'PPSR_EPOCH' : PPSR_epoch,
                             }
-
-                            if self.__config['extention'] not in sensor_config.time_correlation_tables:
-                                sensor_config.time_correlation_tables[self.__config['extention']] = []
 
                             bisect.insort(sensor_config.time_correlation_tables[self.__config['extention']], time_correlation_table_entry, key=lambda e: (e['PPSR'], e['PPSS']))
                         else:
