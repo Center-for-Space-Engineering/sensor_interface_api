@@ -2,7 +2,7 @@
     This module is for processing packets that are defined in the telemetry Dictionary 
 '''
 import copy
-from typing import Optional
+# from typing import Optional
 from bitarray import bitarray
 from datetime import datetime, timedelta, timezone
 import bisect
@@ -113,106 +113,109 @@ class sobj_packet_processor(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        self.__logger.send_log(f"Process data for {self.__name=} | {self.__config=}")
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
-        buffer_dict_to_publish = {
-        }
-        for packet in data:
-            if len(packet) > 0:
-                # print(f"APID: {self.__apid}\n\tPacket {packet}")
-                packet_count = ((packet[2] << 8) | (packet[3])) & 0x3FFF
-                sys_clk_ms = (packet[sensor_config.ccsds_header_len+1] << 24) | (packet[sensor_config.ccsds_header_len+2] << 16) | (packet[sensor_config.ccsds_header_len+3] << 8) | (packet[sensor_config.ccsds_header_len+4])
-                real_time_clk_s = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+3])
-                cur_position_bits = int((sensor_config.ccsds_header_len+1 + sensor_config.system_clock + sensor_config.real_time_clock) * 8)
-                packet_bits = bitarray()
-                packet_bits.frombytes(packet)
+        while sensor_parent.data_received_is_empty(self):
+            # self.__logger.send_log(f"Process data for {self.__name=} | {self.__config=}")
+            data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])[self.__packet_nmemonic]
 
-                granule_rate_hz = self.__packet_config['G. Rate']
-                granule_period_ms: float = 1 / granule_rate_hz * 1000 if granule_rate_hz != 0 else 0.0
+            buffer_dict_to_publish = {
+            }
+            for packet in data:
+                if len(packet) > 0:
+                    self.__logger.send_log(f"{packet.hex()}")
+                    # print(f"APID: {self.__apid}\n\tPacket {packet}")
+                    packet_count = ((packet[2] << 8) | (packet[3])) & 0x3FFF
+                    sys_clk_ms = (packet[sensor_config.ccsds_header_len+1] << 24) | (packet[sensor_config.ccsds_header_len+2] << 16) | (packet[sensor_config.ccsds_header_len+3] << 8) | (packet[sensor_config.ccsds_header_len+4])
+                    real_time_clk_s = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock+3])
+                    cur_position_bits = int((sensor_config.ccsds_header_len+1 + sensor_config.system_clock + sensor_config.real_time_clock) * 8)
+                    packet_bits = bitarray()
+                    packet_bits.frombytes(packet)
 
-                for j in range(self.__packet_config['Granule count']):
-                    granule_delta_ms: float = j * granule_period_ms
-                    granule_sys_clk_ms: float = sys_clk_ms + granule_delta_ms
-                    granule_real_time_clk_s: float = real_time_clk_s + granule_delta_ms / 1000
+                    granule_rate_hz = self.__packet_config['G. Rate']
+                    granule_period_ms: float = 1 / granule_rate_hz * 1000 if granule_rate_hz != 0 else 0.0
 
-                    self.__buffer['time_STM_CLK'][j] = int(granule_sys_clk_ms)
-                    self.__buffer['time_RTC'][j] = int(granule_real_time_clk_s)
+                    for j in range(self.__packet_config['Granule count']):
+                        granule_delta_ms: float = j * granule_period_ms
+                        granule_sys_clk_ms: float = sys_clk_ms + granule_delta_ms
+                        granule_real_time_clk_s: float = real_time_clk_s + granule_delta_ms / 1000
 
-                    # Update PPS_UTC and, if necessary, PPSS and PPSR epochs
-                    if self.__name in sensor_config.time_correlation:
-                        # Updating PPS_UTC
-                        #get PPS packet for the correct board
-                        PPSS = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+4])
-                        PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+3])
+                        self.__buffer['time_STM_CLK'][j] = int(granule_sys_clk_ms)
+                        self.__buffer['time_RTC'][j] = int(granule_real_time_clk_s)
 
-                        gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2])
-                        gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+4])
-            
-                        if gps_week != 0 and gps_milli != 0:
-                            leap_seconds = 18
+                        # Update PPS_UTC and, if necessary, PPSS and PPSR epochs
+                        if self.__name in sensor_config.time_correlation:
+                            # Updating PPS_UTC
+                            #get PPS packet for the correct board
+                            PPSS = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+4])
+                            PPSR = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+1] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+2] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+sensor_config.PPSM_len+sensor_config.PPSS_len+3])
 
-                            newPPS_UTC = (datetime(1980, 1, 6, 0 , 0) + timedelta(weeks=gps_week) + timedelta(milliseconds=gps_milli) - timedelta(seconds=leap_seconds))
-                            PPSS_epoch = newPPS_UTC- timedelta(milliseconds=PPSS)
-                            PPSR_epoch = newPPS_UTC- timedelta(seconds=PPSR)
+                            gps_week = (packet[sensor_config.ccsds_header_len + sensor_config.system_clock + sensor_config.real_time_clock+ 1] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+2])
+                            gps_milli = (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+1] << 24) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+2] << 16) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+3] << 8) | (packet[sensor_config.ccsds_header_len+sensor_config.system_clock + sensor_config.real_time_clock+sensor_config.PPSW_len+4])
+                
+                            if gps_week != 0 and gps_milli != 0:
+                                leap_seconds = 18
 
-                            self.__buffer['PPS_UTC'][j] = newPPS_UTC.strftime('%Y-%m-%d %H:%M:%-S.%f')
-                            self.__buffer['PPSS_EPOCH'][j] = PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
-                            self.__buffer['PPSR_EPOCH'][j] = PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
+                                newPPS_UTC = (datetime(1980, 1, 6, 0 , 0) + timedelta(weeks=gps_week) + timedelta(milliseconds=gps_milli) - timedelta(seconds=leap_seconds))
+                                PPSS_epoch = newPPS_UTC- timedelta(milliseconds=PPSS)
+                                PPSR_epoch = newPPS_UTC- timedelta(seconds=PPSR)
 
-                            time_correlation_table_entry = {
-                                'PPSR' : PPSR,
-                                'PPSS' : PPSS,
-                                'PPS_UTC' : newPPS_UTC,
-                            }
+                                self.__buffer['PPS_UTC'][j] = newPPS_UTC.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                                self.__buffer['PPSS_EPOCH'][j] = PPSS_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                                self.__buffer['PPSR_EPOCH'][j] = PPSR_epoch.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
 
-                            bisect.insort(sensor_config.time_correlation_tables[self.__config['extention']], time_correlation_table_entry, key=lambda e: (e['PPSR'], e['PPSS']))
-                        else:
-                            self.__buffer['PPS_UTC'][j]    = None # Swenson recommended None / null so the field comes in empty into the database
-                            self.__buffer['PPSS_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
-                            self.__buffer['PPSR_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
+                                time_correlation_table_entry = {
+                                    'PPSR' : PPSR,
+                                    'PPSS' : PPSS,
+                                    'PPS_UTC' : newPPS_UTC,
+                                }
 
-                    # Update UTC times        
-                    granule_system_clk_utc, granule_real_time_clk_utc = self.utcs_from_clks(granule_sys_clk_ms, granule_real_time_clk_s)
-                    self.__buffer['time_STM_CLK_UTC'][j] = granule_system_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')
-                    self.__buffer['time_RTC_UTC'][j] = granule_real_time_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
-                    self.__buffer['received_at'][j] = datetime.now(timezone.utc).timestamp()
-
-                    self.__buffer['packet_count'][j] = packet_count
-
-                    for i in range(len(self.__unpacking_map)): # pylint: disable=C0200
-                        # print(f"APID: {self.__apid}\tPacket length: {len(packet)}\tPacket length bits: {len(packet_bits)}\tcolmslist curr: {self.__colms_list[i]}\t cur_position: {cur_position_bits}\tcurpostiion+unpacking: {cur_position_bits+self.__unpacking_map[i]}")
-                        temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
-                        if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
-                            self.__buffer[self.__colms_list[i][0]][j] = 0
-                            # self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
-                        else :
-                            if self.__colms_list[i][2] == 'int' and temp[0] == 1:
-                                while len(temp) < 32:
-                                    temp.insert(0,1)
-                                self.__buffer[self.__colms_list[i][0]][j] = int.from_bytes(temp, signed = True)
+                                bisect.insort(sensor_config.time_correlation_tables[self.__config['extention']], time_correlation_table_entry, key=lambda e: (e['PPSR'], e['PPSS']))
                             else:
-                                self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
-                        cur_position_bits += self.__unpacking_map[i]
+                                self.__buffer['PPS_UTC'][j]    = None # Swenson recommended None / null so the field comes in empty into the database
+                                self.__buffer['PPSS_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
+                                self.__buffer['PPSR_EPOCH'][j] = None # Swenson recommended None / null so the field comes in empty into the database
 
-                # save to db and publish 
-                buf_copy = copy.deepcopy(self.__buffer)
-                sensor_parent.save_data(self, table=f"{self.__name}", data=buf_copy)
+                        # Update UTC times        
+                        granule_system_clk_utc, granule_real_time_clk_utc = self.utcs_from_clks(granule_sys_clk_ms, granule_real_time_clk_s)
+                        self.__buffer['time_STM_CLK_UTC'][j] = granule_system_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')
+                        self.__buffer['time_RTC_UTC'][j] = granule_real_time_clk_utc.strftime('%Y-%m-%d %H:%M:%-S.%f')[:-3]
+                        self.__buffer['received_at'][j] = datetime.now(timezone.utc).timestamp()
 
-                #lets save the data into a dictionary
-                all_keys_set = set(self.__buffer.keys()).union(buffer_dict_to_publish.keys())
+                        self.__buffer['packet_count'][j] = packet_count
 
-                for key in all_keys_set:
-                    buffer_dict_to_publish[key] = self.__buffer.get(key, []) + buffer_dict_to_publish.get(key, [])
+                        for i in range(len(self.__unpacking_map)): # pylint: disable=C0200
+                            # print(f"APID: {self.__apid}\tPacket length: {len(packet)}\tPacket length bits: {len(packet_bits)}\tcolmslist curr: {self.__colms_list[i]}\t cur_position: {cur_position_bits}\tcurpostiion+unpacking: {cur_position_bits+self.__unpacking_map[i]}")
+                            temp = packet_bits[cur_position_bits:cur_position_bits+self.__unpacking_map[i]]
+                            if len(temp) > 32: #all of these need to be an unit 32 or smaller. 
+                                self.__buffer[self.__colms_list[i][0]][j] = 0
+                                # self.__logger.send_log(f'Unpacking packet {self.__packet_nmemonic} got too large of bin size at {self.__colms_list[i][0]}, must be 32 bits or smaller but has size {self.__unpacking_map[i]}.')
+                            else :
+                                if self.__colms_list[i][2] == 'int' and temp[0] == 1:
+                                    while len(temp) < 32:
+                                        temp.insert(0,1)
+                                    self.__buffer[self.__colms_list[i][0]][j] = int.from_bytes(temp, signed = True)
+                                else:
+                                    self.__buffer[self.__colms_list[i][0]][j] = self.bitarray_to_int(temp) | 0x00000000
+                            cur_position_bits += self.__unpacking_map[i]
 
-                # flush the buffer
-                for key in self.__buffer: # pylint: disable=C0206
-                    if not key == 'granule_index':
-                        for byte_storage in range(len(self.__buffer[key])):
-                            self.__buffer[key][byte_storage] = 0xFFFFFFFF
+                    # save to db and publish 
+                    buf_copy = copy.deepcopy(self.__buffer)
+                    sensor_parent.save_data(self, table=f"{self.__name}", data=buf_copy)
 
-        sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
-        sensor_parent.publish(self)
-        
+                    #lets save the data into a dictionary
+                    all_keys_set = set(self.__buffer.keys()).union(buffer_dict_to_publish.keys())
+
+                    for key in all_keys_set:
+                        buffer_dict_to_publish[key] = self.__buffer.get(key, []) + buffer_dict_to_publish.get(key, [])
+
+                    # flush the buffer
+                    for key in self.__buffer: # pylint: disable=C0206
+                        if not key == 'granule_index':
+                            for byte_storage in range(len(self.__buffer[key])):
+                                self.__buffer[key][byte_storage] = 0xFFFFFFFF
+
+            sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
+            sensor_parent.publish(self)
+            
     def bitarray_to_int(self, bit_array):
         '''
             converts bitarray into and int

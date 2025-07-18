@@ -56,10 +56,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
     '''
     def __init__(self, coms, config:dict, name:str, events_dict:dict = {}, graphs:list = None, max_data_points = 10, table_structure: dict = None, db_name: str = '', data_overwrite_exception:bool = True) -> None: # pylint: disable=w0102,r0915
         ###################### Sensor information ################################
-        self.__logger = loggerCustom("logs/sensor_parent.txt") # pylint: disable=W0238
+        self.__logger = loggerCustom(f"logs/sensor_parent/{name}.txt") # pylint: disable=W0238
         self.__coms = coms
         self.__status_lock = threading.Lock()
         self.__status = "Not Running"
+        self.__temp_data_dict = {}
         self.__data_received = Queue()
         self.__data_lock = threading.Lock()
         self.__tap_requests = []
@@ -143,7 +144,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         if self.__config['tap_request'] is not None:
             for request in self.__config['tap_request']:
                 self.make_data_tap(request)
-                # self.__data_received[request] = [] #make a spot in the data received for this tap info to be added to. 
+                self.__temp_data_dict[request] = [] #make a spot in the data received for this tap info to be added to. 
             self.__taps = self.__config['tap_request']
         else :
             self.__taps = ['None']
@@ -208,6 +209,11 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             thread. If you have large amounts of processing have this function create another thread and process the data on that. 
         '''
         raise NotImplementedError("process_data Not implemented, should process that last data received (data is stored in the __data_received variable).")
+    def data_received_is_empty(self):
+        '''
+            Docstring
+        '''
+        return not self.__data_received.empty()
     def get_data_received(self, tap_name):
         '''
             Returns the last data point collected from the given tap
@@ -222,6 +228,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
         if self.__data_lock.acquire(timeout=5): # pylint: disable=R1732
             data_copy = copy.deepcopy(self.__data_received.get_nowait()[tap_name])
+            self.__logger.send_log(f"{self.__data_received.qsize()}")
             self.__data_lock.release()
         else : 
             raise RuntimeError("Could not acquire data lock")
@@ -269,7 +276,9 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
             # self.__logger.send_log(f"{self.__data_received}")
             # self.__data_buffer_overwrite = True
-            self.__data_received.put_nowait({sender: copy.deepcopy(data)}) #NOTE: This could make things really slow, depending on the data rate.
+            self.__temp_data_dict[sender] = copy.deepcopy(data)
+            self.__logger.send_log(f"adding data {data}")
+            self.__data_received.put_nowait(self.__temp_data_dict) #NOTE: This could make things really slow, depending on the data rate.
             threadWrapper.set_event(self, f'data_received_for_{sender}')
             if sys_c.read_from_file:
                 self.__coms.send_request(sys_c.file_listener_name, ['mark_started', sender])

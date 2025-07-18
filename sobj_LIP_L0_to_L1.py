@@ -56,79 +56,80 @@ class sobj_LIP_L0_to_L1(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {
-            'IiS' : [],
-            'IQS' : [],
-            # 'IQS_1' : [],
-            'Mag' : [],
-            'Phase' : [],
-            'time_STM_CLK' : [],
-            'time_RTC' : [],
-            'time_STM_CLK_UTC' : [],
-            'time_RTC_UTC' : [],
-            'received_at' : [],
-            'packet_count' : [],
-            'granule_index':[],
+        while sensor_parent.data_received_is_empty(self):
+            data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
+            buffer = {
+                'IiS' : [],
+                'IQS' : [],
+                # 'IQS_1' : [],
+                'Mag' : [],
+                'Phase' : [],
+                'time_STM_CLK' : [],
+                'time_RTC' : [],
+                'time_STM_CLK_UTC' : [],
+                'time_RTC_UTC' : [],
+                'received_at' : [],
+                'packet_count' : [],
+                'granule_index':[],
 
-        }
+            }
 
-        # self.__logger.send_log(f"data: {type(data)}")
+            # self.__logger.send_log(f"data: {type(data)}")
 
-        for key in data:
-            # self.__logger.send_log(f"key: {key}")
-            match key:
-                case 'IiS':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        # converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        converted = val
-                        # gain conversion
-                        converted = converted*self.__LIP_I_Gain + self.__LIP_I_Offset
-                        # # RAW values
-                        # converted = val
-                        buffer[key].append(converted)
-                case 'IQS':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # converted = val
-                        # gain conversion
-                        converted = converted*self.__LIP_Q_Gain + self.__LIP_Q_Offset
-                        # # RAW values
-                        # converted = val
-                        buffer[key].append(converted)
-                # case 'IQS_1':
-                #     buffer[key] = []
-                #     for val in data[key]:
-                #         # sign extension
-                #         converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                #         # gain conversion
-                #         converted = converted*self.__LIP_Q_Gain + self.__LIP_Q_Offset
-                #         # # RAW values
-                #         # converted = val
-                #         buffer[key].append(converted)
+            for key in data:
+                # self.__logger.send_log(f"key: {key}")
+                match key:
+                    case 'IiS':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            # converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            converted = val
+                            # gain conversion
+                            converted = converted*self.__LIP_I_Gain + self.__LIP_I_Offset
+                            # # RAW values
+                            # converted = val
+                            buffer[key].append(converted)
+                    case 'IQS':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # converted = val
+                            # gain conversion
+                            converted = converted*self.__LIP_Q_Gain + self.__LIP_Q_Offset
+                            # # RAW values
+                            # converted = val
+                            buffer[key].append(converted)
+                    # case 'IQS_1':
+                    #     buffer[key] = []
+                    #     for val in data[key]:
+                    #         # sign extension
+                    #         converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                    #         # gain conversion
+                    #         converted = converted*self.__LIP_Q_Gain + self.__LIP_Q_Offset
+                    #         # # RAW values
+                    #         # converted = val
+                    #         buffer[key].append(converted)
 
-                case 'time_STM_CLK':
-                    buffer[key] = data[key]
-                case 'time_RTC':
-                    buffer[key] = data[key]
-                case 'granule_index':
-                    buffer[key] = data[key]
-                case _ :
-                    buffer[key] = data[key]
+                    case 'time_STM_CLK':
+                        buffer[key] = data[key]
+                    case 'time_RTC':
+                        buffer[key] = data[key]
+                    case 'granule_index':
+                        buffer[key] = data[key]
+                    case _ :
+                        buffer[key] = data[key]
 
-        # self.__logger.send_log(f"buffer: {buffer}")
+            # self.__logger.send_log(f"buffer: {buffer}")
 
-        buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiS'], buffer['IQS'])]
-        buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiS'], buffer['IQS'])]
+            buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiS'], buffer['IQS'])]
+            buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiS'], buffer['IQS'])]
 
 
-        # buffer['Mag'] = [math.floor(x[0] / (2**10)) for x in zip(buffer['IQS'])]
-        # buffer['Phase'] = [x[0] - (math.floor(x[0] / (2**10)) * 2**10) for x in zip(buffer['IQS'])]
+            # buffer['Mag'] = [math.floor(x[0] / (2**10)) for x in zip(buffer['IQS'])]
+            # buffer['Phase'] = [x[0] - (math.floor(x[0] / (2**10)) * 2**10) for x in zip(buffer['IQS'])]
 
-        # self.__logger.send_log(str(buffer))
+            # self.__logger.send_log(str(buffer))
 
-        sensor_parent.save_data(self, table = 'LIP_L1', data = buffer)
+            sensor_parent.save_data(self, table = 'LIP_L1', data = buffer)

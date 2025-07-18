@@ -45,42 +45,43 @@ class sobj_TIP_L0_to_L1(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {
-            'TFQ' : [],
-            'time_STM_CLK' : [],
-            'time_RTC' : [],
-            'time_STM_CLK_UTC' : [],
-            'time_RTC_UTC' : [],
-            'received_at' : [],
-            'packet_count' : [],
-            'granule_index' : [],
-        }
+        while sensor_parent.data_received_is_empty(self):
+            data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
+            buffer = {
+                'TFQ' : [],
+                'time_STM_CLK' : [],
+                'time_RTC' : [],
+                'time_STM_CLK_UTC' : [],
+                'time_RTC_UTC' : [],
+                'received_at' : [],
+                'packet_count' : [],
+                'granule_index' : [],
+            }
 
-        # self.__logger.send_log(f"data: {str(data.keys())}")
+            # self.__logger.send_log(f"data: {str(data.keys())}")
 
-        for key in data:
-            match key:
-                case 'TFQ':
-                    buffer[key] = []
-                    for val in data[key]:                        
-                        # gain conversion
-                        freq = val/(self.__TIP_ts * (2**self.__TIP_N))
-                        # freq = val
-                        converted = freq*self.__TIP_freq_Gain + self.__TIP_freq_Offset
-                        buffer[key].append(converted)
-                # case 'time_STM_CLK':
-                #     buffer[key] = data[key]
-                # case 'time_RTC':
-                #     buffer[key] = data[key]
-                # case 'granule_index':
-                #     buffer[key] = data[key]
-                case _:
-                    buffer[key] = data[key]
+            for key in data:
+                match key:
+                    case 'TFQ':
+                        buffer[key] = []
+                        for val in data[key]:                        
+                            # gain conversion
+                            freq = val/(self.__TIP_ts * (2**self.__TIP_N))
+                            # freq = val
+                            converted = freq*self.__TIP_freq_Gain + self.__TIP_freq_Offset
+                            buffer[key].append(converted)
+                    # case 'time_STM_CLK':
+                    #     buffer[key] = data[key]
+                    # case 'time_RTC':
+                    #     buffer[key] = data[key]
+                    # case 'granule_index':
+                    #     buffer[key] = data[key]
+                    case _:
+                        buffer[key] = data[key]
 
-        # for key in buffer:
-            # self.__logger.send_log(f"{key}: {str(buffer[key])}")
+            # for key in buffer:
+                # self.__logger.send_log(f"{key}: {str(buffer[key])}")
 
-        # self.__logger.send_log("------------------------------------")
+            # self.__logger.send_log("------------------------------------")
 
-        sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)
+            sensor_parent.save_data(self, table = 'TIP_L1', data = buffer)

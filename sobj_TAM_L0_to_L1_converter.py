@@ -44,56 +44,57 @@ class sobj_TAM_L0_to_L1_converter(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {
-            'MBX' : [],
-            'MBY' : [],
-            'MBZ' : [],
-            'time_STM_CLK' : [],
-            'time_RTC' : [],
-            'time_STM_CLK_UTC' : [],
-            'time_RTC_UTC' : [],
-            'received_at' : [],
-            'granule_index' : [],
-        }
+        while sensor_parent.data_received_is_empty(self):
+            data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
+            buffer = {
+                'MBX' : [],
+                'MBY' : [],
+                'MBZ' : [],
+                'time_STM_CLK' : [],
+                'time_RTC' : [],
+                'time_STM_CLK_UTC' : [],
+                'time_RTC_UTC' : [],
+                'received_at' : [],
+                'granule_index' : [],
+            }
 
-        # self.__logger.send_log(f"data: {data}")
+            # self.__logger.send_log(f"data: {data}")
 
-        for key in data:
-            match key:
-                case 'MBX':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # gain conversion
-                        converted = converted/self.__TAMGain
-                        buffer[key].append(converted)
-                case 'MBY':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # gain conversion
-                        converted = converted/self.__TAMGain
-                        buffer[key].append(converted)
-                case 'MBZ':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # gain conversion
-                        converted = converted/self.__TAMGain
-                        buffer[key].append(converted)
+            for key in data:
+                match key:
+                    case 'MBX':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # gain conversion
+                            converted = converted/self.__TAMGain
+                            buffer[key].append(converted)
+                    case 'MBY':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # gain conversion
+                            converted = converted/self.__TAMGain
+                            buffer[key].append(converted)
+                    case 'MBZ':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # gain conversion
+                            converted = converted/self.__TAMGain
+                            buffer[key].append(converted)
 
-                # case 'time_STM_CLK':
-                #     buffer[key] = data[key]
-                # case 'time_RTC':
-                #     buffer[key] = data[key]
-                # case 'granule_index':
-                #     buffer[key] = data[key]
-                case _ :
-                    buffer[key] = data[key]
+                    # case 'time_STM_CLK':
+                    #     buffer[key] = data[key]
+                    # case 'time_RTC':
+                    #     buffer[key] = data[key]
+                    # case 'granule_index':
+                    #     buffer[key] = data[key]
+                    case _ :
+                        buffer[key] = data[key]
 
 
-        # sensor_parent.save_data(self, table = 'TAM_L1', data = buffer)
+            # sensor_parent.save_data(self, table = 'TAM_L1', data = buffer)

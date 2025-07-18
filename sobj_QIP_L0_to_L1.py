@@ -54,71 +54,72 @@ class sobj_QIP_L0_to_L1(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
-        buffer = {
-            'TFQ' : [],
-            'IiQ' : [],
-            'IQQ' : [],
-            'Mag' : [],
-            'Phase' : [],
-            'time_STM_CLK' : [],
-            'time_RTC' : [],
-            'time_STM_CLK_UTC' : [],
-            'time_RTC_UTC' : [],
-            'received_at' : [],
-            'packet_count' : [],
-            'granule_index' : [],
-        }
+        while sensor_parent.data_received_is_empty(self):
+            data = sensor_parent.get_data_received(self, self.__config['tap_request'][0])
+            buffer = {
+                'TFQ' : [],
+                'IiQ' : [],
+                'IQQ' : [],
+                'Mag' : [],
+                'Phase' : [],
+                'time_STM_CLK' : [],
+                'time_RTC' : [],
+                'time_STM_CLK_UTC' : [],
+                'time_RTC_UTC' : [],
+                'received_at' : [],
+                'packet_count' : [],
+                'granule_index' : [],
+            }
 
-        # self.__logger.send_log(f"data: {type(data)}")
+            # self.__logger.send_log(f"data: {type(data)}")
 
-        for key in data:
-            # self.__logger.send_log(f"key: {key}")
-            match key:
-                case 'TFQ':
-                    buffer[key] = []
-                    for val in data[key]:                        
-                        # gain conversion
-                        # freq = val/(self.__TIP_ts * (2**self.__TIP_N))
-                        freq = val
-                        converted = freq*self.__QIP_freq_Gain + self.__QIP_freq_Offset
-                        buffer[key].append(converted)
-                case 'IiQ':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # gain conversion
-                        converted = converted*self.__QIP_I_Gain + self.__QIP_I_Offset
-                        # # RAW values
-                        # converted = val
-                        buffer[key].append(converted)
-                case 'IQQ':
-                    buffer[key] = []
-                    for val in data[key]:
-                        # sign extension
-                        converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
-                        # gain conversion
-                        converted = converted*self.__QIP_Q_Gain + self.__QIP_Q_Offset
-                        # # RAW values
-                        # converted = val
-                        buffer[key].append(converted)
+            for key in data:
+                # self.__logger.send_log(f"key: {key}")
+                match key:
+                    case 'TFQ':
+                        buffer[key] = []
+                        for val in data[key]:                        
+                            # gain conversion
+                            # freq = val/(self.__TIP_ts * (2**self.__TIP_N))
+                            freq = val
+                            converted = freq*self.__QIP_freq_Gain + self.__QIP_freq_Offset
+                            buffer[key].append(converted)
+                    case 'IiQ':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # gain conversion
+                            converted = converted*self.__QIP_I_Gain + self.__QIP_I_Offset
+                            # # RAW values
+                            # converted = val
+                            buffer[key].append(converted)
+                    case 'IQQ':
+                        buffer[key] = []
+                        for val in data[key]:
+                            # sign extension
+                            converted = (val & (self.__sign_bit-1)) - (val & self.__sign_bit)
+                            # gain conversion
+                            converted = converted*self.__QIP_Q_Gain + self.__QIP_Q_Offset
+                            # # RAW values
+                            # converted = val
+                            buffer[key].append(converted)
 
-                case 'time_STM_CLK':
-                    buffer[key] = data[key]
-                case 'time_RTC':
-                    buffer[key] = data[key]
-                case 'granule_index':
-                    buffer[key] = data[key]
-                case _ :
-                    buffer[key] = data[key]
-        # self.__logger.send_log(f"buffer: {buffer}")
+                    case 'time_STM_CLK':
+                        buffer[key] = data[key]
+                    case 'time_RTC':
+                        buffer[key] = data[key]
+                    case 'granule_index':
+                        buffer[key] = data[key]
+                    case _ :
+                        buffer[key] = data[key]
+            # self.__logger.send_log(f"buffer: {buffer}")
 
-        buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiQ'], buffer['IQQ'])]
-        buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiQ'], buffer['IQQ'])]
+            buffer['Mag'] = [math.sqrt(x[0]**2 + x[1]**2) for x in zip(buffer['IiQ'], buffer['IQQ'])]
+            buffer['Phase'] = [math.atan2(x[1], x[0]) for x in zip(buffer['IiQ'], buffer['IQQ'])]
 
-        # self.__logger.send_log(str(buffer))
+            # self.__logger.send_log(str(buffer))
 
 
 
-        sensor_parent.save_data(self, table = 'QIP_L1', data = buffer)
+            sensor_parent.save_data(self, table = 'QIP_L1', data = buffer)
