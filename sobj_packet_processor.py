@@ -222,7 +222,6 @@ class sobj_packet_processor(sensor_parent):
                     if not key == 'granule_index':
                         for byte_storage in range(len(self.__buffer[key])):
                             self.__buffer[key][byte_storage] = 0xFFFFFFFF
-
         sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
         sensor_parent.publish(self)
         
