@@ -99,14 +99,13 @@ class sobj_packet_detect(sensor_parent):
         
         # self.__logger.send_log(str(event))
         event_name = event[18:]
-        while sensor_parent.data_received_is_empty(self):
-            temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, event_name)) #add the received data to the list of data we have received.
-            
-            with self.__data_lock:
-                self.__serial_line_two_data += temp
-                data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
-                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [copy.deepcopy(self.__serial_line_two_data[:data_ready_for_processing]), event, apids, telemetry_packets_copy]]) #start a thread to process data 
-                self.__serial_line_two_data = self.__serial_line_two_data[data_ready_for_processing:]
+        temp, _ = sensor_parent.preprocess_ccsds_data(self, sensor_parent.get_data_received(self, event_name)) #add the received data to the list of data we have received.
+        
+        with self.__data_lock:
+            self.__serial_line_two_data += temp
+            data_ready_for_processing =  len(self.__serial_line_two_data) #if the last packet is a partial pack then we are not going to process it.
+            self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_count_packets, f'processing data for {self.__name}', self, [copy.deepcopy(self.__serial_line_two_data[:data_ready_for_processing]), event, apids, telemetry_packets_copy]]) #start a thread to process data 
+            self.__serial_line_two_data = self.__serial_line_two_data[data_ready_for_processing:]
     def process_count_packets(self, temp_data_structure, _, apids, telemetry_packets_copy):
         '''
             This function rips apart telemetry packets and counts how many of each type there is.  

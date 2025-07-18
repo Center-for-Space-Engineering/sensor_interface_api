@@ -38,20 +38,19 @@ class sobj_gps_board_ao_test(sensor_parent):
 
             NOTE: This function always gets called no matter with tap gets data. 
         '''
-        while sensor_parent.data_received_is_empty(self):
-            temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
-            # pylint: disable=R1732
-            if self.__data_lock.acquire(timeout=10):
-                if start_partial and len(self.__serial_line_two_data) > 0: 
-                    self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
-                    self.__serial_line_two_data += temp[1:]
-                else :
-                    self.__serial_line_two_data += temp
-                data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.
-                self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} aux', self, [data_ready_for_processing]]) #start a thread to process data
-                self.__data_lock.release()
+        temp, start_partial, end_partial = sensor_parent.preprocess_data(self, sensor_parent.get_data_received(self, self.__config['tap_request'][0]), delimiter=self.__config['Sensor_data_tag'], terminator=self.__config['Sensor_terminator_data_tag']) #add the received data to the list of data we have received.
+        # pylint: disable=R1732
+        if self.__data_lock.acquire(timeout=10):
+            if start_partial and len(self.__serial_line_two_data) > 0: 
+                self.__serial_line_two_data[-1] += temp[0] #append the message to the previous message (this is because partial message can be included in batches, so we are basically adding the partial messages to gether, across batches. )
+                self.__serial_line_two_data += temp[1:]
             else :
-                raise RuntimeError("Could not acquire data lock")
+                self.__serial_line_two_data += temp
+            data_ready_for_processing = len(self.__serial_line_two_data) if not end_partial else len(self.__serial_line_two_data) - 1 #if the last packet is a partial pack then we are not going to process it.
+            self.__coms.send_request('task_handler', ['add_thread_request_func', self.process_gps_packets, f'processing data for {self.__name} aux', self, [data_ready_for_processing]]) #start a thread to process data
+            self.__data_lock.release()
+        else :
+            raise RuntimeError("Could not acquire data lock")
     def process_gps_packets(self, num_packets): # pylint: disable=R0915
         '''
             This function rips apart gps packets and then saves them in the data base as ccsds packets.  
