@@ -207,15 +207,14 @@ class sobj_packet_processor(sensor_parent):
                     for key in all_keys_set:
                         buffer_dict_to_publish[key] = self.__buffer.get(key, []) + buffer_dict_to_publish.get(key, [])
 
-                    # flush the buffer
-                    for key in self.__buffer: # pylint: disable=C0206
-                        if not key == 'granule_index':
-                            for byte_storage in range(len(self.__buffer[key])):
-                                self.__buffer[key][byte_storage] = 0xFFFFFFFF
-
-            sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
-            sensor_parent.publish(self)
-            
+                # flush the buffer
+                for key in self.__buffer: # pylint: disable=C0206
+                    if not key == 'granule_index':
+                        for byte_storage in range(len(self.__buffer[key])):
+                            self.__buffer[key][byte_storage] = 0xFFFFFFFF
+        sensor_parent.set_publish_data(self, data=buffer_dict_to_publish)
+        sensor_parent.publish(self)
+        
     def bitarray_to_int(self, bit_array):
         '''
             converts bitarray into and int

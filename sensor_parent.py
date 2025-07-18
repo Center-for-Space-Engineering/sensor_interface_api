@@ -144,7 +144,7 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         if self.__config['tap_request'] is not None:
             for request in self.__config['tap_request']:
                 self.make_data_tap(request)
-                self.__temp_data_dict[request] = [] #make a spot in the data received for this tap info to be added to. 
+                self.__data_received[request] = None #make a spot in the data received for this tap info to be added to. 
             self.__taps = self.__config['tap_request']
         else :
             self.__taps = ['None']
@@ -227,8 +227,8 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
         else :
             raise RuntimeError("Could not acquire data buffer overwrite lock.")
         if self.__data_lock.acquire(timeout=5): # pylint: disable=R1732
-            data_copy = copy.deepcopy(self.__data_received.get_nowait()[tap_name])
-            self.__logger.send_log(f"{self.__data_received.qsize()}")
+            data_copy = copy.deepcopy(self.__data_received[tap_name])
+            self.__data_received[tap_name] = None
             self.__data_lock.release()
         else : 
             raise RuntimeError("Could not acquire data lock")
@@ -274,11 +274,22 @@ class sensor_parent(threadWrapper, sensor_html_page_generator):
             time.sleep(1)
 
         if self.__data_lock.acquire(timeout=1): # pylint: disable=R1732
-            # self.__logger.send_log(f"{self.__data_received}")
-            # self.__data_buffer_overwrite = True
-            self.__temp_data_dict[sender] = copy.deepcopy(data)
-            self.__logger.send_log(f"adding data {data}")
-            self.__data_received.put_nowait(self.__temp_data_dict) #NOTE: This could make things really slow, depending on the data rate.
+            # self.__data_received[sender] = copy.deepcopy(data)
+            if isinstance(data, dict):
+                if self.__data_received[sender] is None:
+                    self.__data_received[sender] = {}
+                if data.keys() == self.__data_received[sender].keys():
+                    for key in data.keys():
+                        self.__data_received[sender][key].extend(copy.deepcopy(data[key])) #NOTE: This could make things really slow, depending on the data rate.
+                    self.__logger.send_log(f"Howdy {self.__data_received[sender]}")
+                else:
+                    self.__logger.send_log("this is probabaly bad")
+                    self.__data_received[sender] = copy.deepcopy(data)
+            else:
+                if self.__data_received[sender] is None:
+                    self.__data_received[sender] = []
+                self.__data_received[sender].extend(copy.deepcopy(data))
+            self.__logger.send_log(f"{self.__data_received[sender]}")
             threadWrapper.set_event(self, f'data_received_for_{sender}')
             if sys_c.read_from_file:
                 self.__coms.send_request(sys_c.file_listener_name, ['mark_started', sender])
